@@ -1,0 +1,6 @@
+https://github.com/PanduDcau/PythonDeepSource/tree/f02427879c561ba32cf38b435987cf2896b8691d/Water%20Quality%20Prediction
+
+Wavelet transform machine learning apply
+https://ataspinar.com/2018/12/21/a-guide-for-using-the-wavelet-transform-in-machine-learning/
+
+https://medium.com/m/global-identity-2?redirectUrl=https%3A%2F%2Ftowardsdatascience.com%2Fcomparing-sample-distributions-with-the-kolmogorov-smirnov-ks-test-a2292ad6fee5
