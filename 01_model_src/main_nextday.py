@@ -1,5 +1,5 @@
 from helper import consolelog
-from config import columns, input_col, categorical_col, output_column, categorical_usecol
+from config import columns, input_col, categorical_col, categorical_usecol
 from config import output_folder
 from config import zscore_lim
 
@@ -26,6 +26,11 @@ from sklearn.linear_model import SGDRegressor
 from keras.models import Sequential
 from sklearn import svm
 import matplotlib
+
+
+output_column = ['Độ kiềm ngày tiếp theo']
+
+todayparam = ['Độ kiềm']
 
 
 
@@ -148,6 +153,8 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     df_num = df.drop(categorical_col,axis=1)
 
     df1 = df[(np.abs(stats.zscore(df_num))<zscore_lim).all(axis=1)].copy()
+
+
     fig= plt.figure(figsize=(10,5))
     ax = sns.boxplot(df1)
     ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
@@ -167,10 +174,29 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     #     df.loc[df['units']==unit,ld_column] = df.loc[df['units']==unit,output_column].shift(1).to_numpy(copy=True)
     # df.dropna(axis=0,inplace=True)
 
-    df = df[input_col+output_column].copy()
+
+
+    # nextday columns
+    # Tạo thêm cột nextday-column chứa dữ liệu của ngày tiếp theo (output)
+    
+    df[output_column] = np.NaN
+
+    # Copy data của ngày hôm trước cho mỗi row
+    unit_l = list(df['units'].unique())
+    for unit in unit_l:
+        df.loc[df['units']==unit,output_column] = df.loc[df['units']==unit,todayparam].shift(-1).to_numpy(copy=True)
+    df.dropna(axis=0,inplace=True)
+    print(df.head())
+
+
+    #-----------------------------------------------------#
+    #
+    #-----------------------------------------------------#
+
+    df = df[input_col + todayparam + output_column].copy()
     df.reset_index(drop=True,inplace=True)
 
-    df.to_csv(os.path.join(output_folder,"databeforetrain1.csv"))
+    df1.to_csv(os.path.join(output_folder,"databeforetrain1.csv"))
 
     consolelog("Plot data!")
     plt.figure(figsize=(10,5))
@@ -208,13 +234,13 @@ def RandomForest_model(X, y):
 
     consolelog("Create MultiOutput RandomForeest")
     
-    rf = RandomForestRegressor(n_estimators=800,
+    rf = RandomForestRegressor(n_estimators=200,
                                max_depth=50,
                                min_samples_split=2,
-                               min_samples_leaf=2,
+                               min_samples_leaf=1,
                                max_features='sqrt', 
                                random_state=0,
-                               bootstrap=False,
+                               bootstrap=True,
                                verbose=1,)
 
     consolelog("Training...")
@@ -245,7 +271,7 @@ def RandomForest_model(X, y):
                 modelname="RandomForest")
     
 
-    # Random searchCV
+    # # Random searchCV
     # rf = RandomForestRegressor()
     # random_grid = get_random_grid()
     # rf_random = RandomizedSearchCV(estimator = rf, 
@@ -271,7 +297,7 @@ def SVRModel(X,y):
 
     consolelog("Create SGD Regressor")
 
-    SVRreg = svm.SVR(kernel='rbf',epsilon=0.5,C=10)
+    SVRreg = svm.SVR(kernel='rbf',epsilon=0.2,C=1)
     # print(f"{X_train.shape=} {y_train.shape=}")
     SVRreg.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
 
@@ -284,7 +310,7 @@ def SVRModel(X,y):
             output_column=output_column,
             modelname="SVRModel")
     
-    # Random searchCV
+    # # Random searchCV
     # SVRreg = svm.SVR()
     # random_grid = getsvrgrid()
     # rf_random = RandomizedSearchCV(estimator = SVRreg, 
@@ -299,7 +325,6 @@ def SVRModel(X,y):
 
 
 def ANNModel(X,y):
-
     X_train, X_test, y_train, y_test = train_test_split(
                             X, y, test_size=0.33, random_state=42)
 
@@ -314,13 +339,13 @@ def ANNModel(X,y):
 
     # define the model
     model1 = Sequential()
-    model1.add(Input(shape=(18,)))
-    model1.add(Dense(30, kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Input(shape=(19,)))
+    model1.add(Dense(15, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
-    # model1.add(Dense(10,kernel_initializer='he_uniform', activation='relu'))
-    # model1.add(Dropout(0.1))
-    # model1.add(Dense(5, kernel_initializer='he_uniform', activation='relu'))
-    # model1.add(Dropout(0.1))
+    model1.add(Dense(10,kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dropout(0.1))
+    model1.add(Dense(5, kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dropout(0.1))
     model1.add(Dense(1))
     model1.compile(loss='mae', 
                    optimizer='nadam',
@@ -390,7 +415,7 @@ def noname():
 
     # RandomForest_model(X,y)
     # SVRModel(X,y)
-    ANNModel(X,y)
+    # ANNModel(X,y)
 
 
 
