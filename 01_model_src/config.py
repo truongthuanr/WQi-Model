@@ -31,4 +31,4 @@ categorical_usecol = [
 
 # output_column = ['TAN', 'Nitrat', 'Nitrit', 'Silica', 'Canxi', 'Kali', 'Magie', 'Độ kiềm', 'Độ cứng']
 output_column = ['Độ kiềm']
-zscore_lim =  2
+zscore_lim =  3

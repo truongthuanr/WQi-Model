@@ -89,23 +89,26 @@ def plot_result(y_test,y_pred,output_column,modelname: str):
 
     # print(y_test[:,0])
     # print(y_pred[:,0])
-
-    fig2 = plt.figure(figsize = [8,8])
-    ind = np.argsort(y_test[:,0])
-    # print(ind)
-    plt.plot(y_test[ind],label="True value")
-    plt.plot(y_pred[ind],label="Predict value",
-             ls="",
-             marker="x")
-    plt.legend()
-    plt.xlabel("Samples")
-    plt.title(f"Ground Truth and Predicted value - {modelname}")
-    plt.savefig(os.path.join(output_folder,f"{modelname}_GroundTruth_{suffix}.png"))
+    
+    #------------------------------
+    # Plot ground-truth
+    #-----------------------------
+    # fig2 = plt.figure(figsize = [8,8])
+    # ind = np.argsort(y_test[:,0])
+    # # print(ind)
+    # plt.plot(y_test[ind],label="True value")
+    # plt.plot(y_pred[ind],label="Predict value",
+    #          ls="",
+    #          marker="x")
+    # plt.legend()
+    # plt.xlabel("Samples")
+    # plt.title(f"Ground Truth and Predicted value - {modelname}")
+    # plt.savefig(os.path.join(output_folder,f"{modelname}_GroundTruth_{suffix}.png"))
 
 
 def readdata() -> pd.DataFrame:
     consolelog("Read data!")
-    df = pd.read_csv("./../../dataset/data1.csv", usecols=columns)
+    df = pd.read_csv("./../../dataset/data_9ao.csv", usecols=columns)
 
     # Rename columns Amoni -> Tan 
     df.rename({'Amoni':'TAN'},axis=1,inplace=True)
@@ -128,7 +131,7 @@ def datacleaning(df: pd.DataFrame) -> pd.DataFrame:
     # convert 'Tuoi tom' column to numeric
     # cell which is not able to convert to float (#REF) will be fill as NaN
     df['Tuổi tôm'] = df['Tuổi tôm'].apply(lambda x: 
-                                        int(float(x)) if x.replace('.','',1).isnumeric() 
+                                        int(float(x)) if str(x).replace('.','',1).isnumeric() 
                                         else np.NaN)
     
     df['units'] = df.apply(lambda x:  f"{x['Vụ nuôi'].replace(' ','')}-{x['module_name']}-{x['ao']}" ,axis=1)
@@ -314,11 +317,11 @@ def ANNModel(X,y):
 
     # define the model
     model1 = Sequential()
-    model1.add(Input(shape=(8,)))
-    model1.add(Dense(16, kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Input(shape=(18,)))
+    model1.add(Dense(10, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
-    model1.add(Dense(8,kernel_initializer='he_uniform', activation='relu'))
-    model1.add(Dropout(0.1))
+    # model1.add(Dense(15,kernel_initializer='he_uniform', activation='relu'))
+    # model1.add(Dropout(0.1))
     # model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
     # model1.add(Dropout(0.1))
     model1.add(Dense(1))

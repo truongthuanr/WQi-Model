@@ -1,7 +1,49 @@
 from helper import consolelog
-from config import columns, input_col, categorical_col, output_column, categorical_usecol
-from config import output_folder
-from config import zscore_lim
+
+
+
+#################################################################################
+#                           Configuration                                       #
+#################################################################################
+columns = ['Date', 'Season', 'Vụ nuôi', 'module_name', 'ao', 
+           'Ngày thả', 'Time','Nhiệt độ', 'pH', 'Độ mặn', 
+           'TDS', 'Độ đục', 'DO', 'Độ màu', 'Độ trong','Độ kiềm', 
+           'Độ cứng','Loại ao', 'Công nghệ nuôi', 'area', 
+           'Giống tôm', 'Tuổi tôm', 'Mực nước', 'Amoni', 
+           'Nitrat', 'Nitrit', 'Silica', 
+        #    'Canxi', 'Kali', 'Magie'
+           ]
+
+# input_col = ['Season', 'Ngày thả', 'Nhiệt độ', 'pH', 'Độ mặn', 
+#            'TDS', 'Độ đục', 'DO', 'Độ màu', 'Độ trong', 
+#            'Loại ao', 'Công nghệ nuôi', 'area', 
+#            'Giống tôm', 'Tuổi tôm', 'Mực nước']
+
+
+input_col = [
+    # 'Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm', 
+    'Ngày thả', 'Nhiệt độ', 'pH', 'Độ mặn', 
+    #    'TDS', 'Độ đục', 'DO',
+    'Độ trong', 
+    'area', 
+    'Tuổi tôm', 'Mực nước']
+
+output_folder = "output"
+
+
+
+categorical_col = ['Date','Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm','units']
+
+categorical_usecol = [
+    # 'Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm'
+    ]
+
+# output_column = ['TAN', 'Nitrat', 'Nitrit', 'Silica', 'Canxi', 'Kali', 'Magie', 'Độ kiềm', 'Độ cứng']
+output_column = ['Độ kiềm']
+zscore_lim =  3
+
+
+
 
 
 
@@ -73,7 +115,7 @@ def plot_result(y_test,y_pred,output_column,modelname: str):
                      f"MAE: {mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"+ "\n" +\
                      f"MAPE: {mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}%"+ "\n" +\
                      f"R2 Score: {r2_score(y_test[:,i],y_pred[:,i]):.3f}"
-                     
+        plt.ylim(lim)             
         plt.text(x=lim[0]+(lim[1]-lim[0])*0.1,
                  y=lim[0]+(lim[1]-lim[0])*0.9,
                  s=error_text)
@@ -105,7 +147,7 @@ def plot_result(y_test,y_pred,output_column,modelname: str):
 
 def readdata() -> pd.DataFrame:
     consolelog("Read data!")
-    df = pd.read_csv("./../../dataset/data1.csv", usecols=columns)
+    df = pd.read_csv("./../../dataset/data_4perday_cleaned.csv", usecols=columns)
 
     # Rename columns Amoni -> Tan 
     df.rename({'Amoni':'TAN'},axis=1,inplace=True)
@@ -128,7 +170,7 @@ def datacleaning(df: pd.DataFrame) -> pd.DataFrame:
     # convert 'Tuoi tom' column to numeric
     # cell which is not able to convert to float (#REF) will be fill as NaN
     df['Tuổi tôm'] = df['Tuổi tôm'].apply(lambda x: 
-                                        int(float(x)) if x.replace('.','',1).isnumeric() 
+                                        int(float(x)) if str(x).replace('.','',1).isnumeric() 
                                         else np.NaN)
     
     df['units'] = df.apply(lambda x:  f"{x['Vụ nuôi'].replace(' ','')}-{x['module_name']}-{x['ao']}" ,axis=1)
@@ -191,27 +233,35 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     df1 = pd.concat([oh_df,df1],axis=1)
     df1.drop(categorical_usecol,inplace=True,axis=1)
 
+    global fill_value
+    fill_value = df1.select_dtypes(include=np.number).mean() 
+
     return df1
+
 
 
 def RandomForest_model(X, y):
 
     X_train, X_test, y_train, y_test = train_test_split(
                         X, y, test_size=0.33, random_state=42)
-    X_sc = StandardScaler()
-    X_sc.fit(X_train)
-    X_train_tf = X_sc.transform(X_train)
+    global X_sc_rf
+    X_sc_rf = StandardScaler()
+    X_sc_rf.fit(X_train)
+    X_train_tf = X_sc_rf.transform(X_train)
 
-    y_sc = StandardScaler()
-    y_sc.fit(y_train)
-    y_train_tf = y_sc.transform(y_train)
+    global y_sc_rf
 
-    consolelog("Create MultiOutput RandomForeest")
+    y_sc_rf = StandardScaler()
+    y_sc_rf.fit(y_train)
+    y_train_tf = y_sc_rf.transform(y_train)
+
+    consolelog("Create RandomForeest")
     
+    global rf
     rf = RandomForestRegressor(n_estimators=800,
-                               max_depth=50,
-                               min_samples_split=2,
-                               min_samples_leaf=2,
+                               max_depth=100,
+                               min_samples_split=5,
+                               min_samples_leaf=1,
                                max_features='sqrt', 
                                random_state=0,
                                bootstrap=False,
@@ -220,8 +270,9 @@ def RandomForest_model(X, y):
     consolelog("Training...")
     rf.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
 
-    rf.score(X_sc.transform(X_test),y_sc.transform(y_test))
-    y_pred = rf.predict(X_sc.transform(X_test))
+    rf.score(X_sc_rf.transform(X_test),y_sc_rf.transform(y_test))
+
+    y_pred = rf.predict(X_sc_rf.transform(X_test))
     y_pred = np.reshape(y_pred,(-1,1))
 
     # for i in range(y_pred.shape[1]):
@@ -240,7 +291,7 @@ def RandomForest_model(X, y):
 
     # plot_result(y_sc.transform(y_test),y_pred, output_column,modelname="RandomForest")
     plot_result(y_test=y_test.to_numpy(),
-                y_pred=y_sc.inverse_transform(y_pred), 
+                y_pred=y_sc_rf.inverse_transform(y_pred), 
                 output_column=output_column,
                 modelname="RandomForest")
     
@@ -258,6 +309,41 @@ def RandomForest_model(X, y):
     # rf_random.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
     # print(rf_random.best_params_)
 
+
+
+def validateRandomForest():
+    dfval = pd.read_csv("./../../dataset/kiemtraA1N09_2.csv")
+
+
+    # Tạo cột chưa có trong dữ liệu test.
+    for col in input_col:
+        if col not in dfval.columns.to_list():
+            dfval[col] = fill_value[col]
+
+    dfval = dfval[[*input_col,*output_column]]
+
+    dfval.to_csv(os.path.join(output_folder,"kiemtraA1N09_before_val.csv"))
+    
+    X_val = dfval[input_col]
+
+    y_val = dfval[output_column]
+
+    rf.score(X_sc_rf.transform(X_val),y_sc_rf.transform(y_val))
+
+    y_pred = rf.predict(X_sc_rf.transform(X_val))
+    y_pred = np.reshape(y_pred,(-1,1))
+
+    plot_result(y_test=y_val.to_numpy(),
+                y_pred=y_sc_rf.inverse_transform(y_pred), 
+                output_column=output_column,
+                modelname="RandomForest_Validate")
+
+
+
+
+
+    
+
 def SVRModel(X,y):
     X_train, X_test, y_train, y_test = train_test_split(
                         X, y, test_size=0.33, random_state=42)
@@ -271,7 +357,7 @@ def SVRModel(X,y):
 
     consolelog("Create SGD Regressor")
 
-    SVRreg = svm.SVR(kernel='rbf',epsilon=0.5,C=10)
+    SVRreg = svm.SVR(kernel='rbf',epsilon=0.2,C=10)
     # print(f"{X_train.shape=} {y_train.shape=}")
     SVRreg.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
 
@@ -314,19 +400,20 @@ def ANNModel(X,y):
 
     # define the model
     model1 = Sequential()
-    model1.add(Input(shape=(8,)))
-    model1.add(Dense(16, kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Input(shape=(17,)))
+    model1.add(Dense(120, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
-    model1.add(Dense(8,kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dense(80, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
-    # model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dense(40,kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dropout(0.1))
+    # model1.add(Dense(5, kernel_initializer='he_uniform', activation='relu'))
     # model1.add(Dropout(0.1))
     model1.add(Dense(1))
     model1.compile(loss='mae', 
                    optimizer='nadam',
                    )
     model1.summary()
-
     model1.fit(X_train_tf,y_train_tf,
             epochs=200,
             batch_size=32,
@@ -388,9 +475,10 @@ def noname():
     y = df[output_column]
     # get_random_grid()
 
-    # RandomForest_model(X,y)
+    RandomForest_model(X,y)
+    validateRandomForest()
     # SVRModel(X,y)
-    ANNModel(X,y)
+    # ANNModel(X,y)
 
 
 

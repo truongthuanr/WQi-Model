@@ -1,7 +1,4 @@
 from helper import consolelog
-from config import columns, input_col, categorical_col, categorical_usecol
-from config import output_folder
-from config import zscore_lim
 
 
 
@@ -31,6 +28,43 @@ import matplotlib
 output_column = ['Độ kiềm ngày tiếp theo']
 
 todayparam = ['Độ kiềm']
+
+
+columns = ['Date', 'Season', 'Vụ nuôi', 'module_name', 'ao', 
+           'Ngày thả', 'Time','Nhiệt độ', 'pH', 'Độ mặn', 
+           'TDS', 'Độ đục', 'DO', 'Độ màu', 'Độ trong','Độ kiềm', 
+           'Độ cứng','Loại ao', 'Công nghệ nuôi', 'area', 
+           'Giống tôm', 'Tuổi tôm', 'Mực nước', 'Amoni', 
+           'Nitrat', 'Nitrit', 'Silica', 
+        #    'Canxi', 'Kali', 'Magie'
+           ]
+
+# input_col = ['Season', 'Ngày thả', 'Nhiệt độ', 'pH', 'Độ mặn', 
+#            'TDS', 'Độ đục', 'DO', 'Độ màu', 'Độ trong', 
+#            'Loại ao', 'Công nghệ nuôi', 'area', 
+#            'Giống tôm', 'Tuổi tôm', 'Mực nước']
+
+
+input_col = [
+    'Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm', 
+    'Ngày thả', 'Nhiệt độ', 'pH', 'Độ mặn', 
+    #    'TDS', 'Độ đục', 'DO',
+    'Độ trong', 
+    'area', 
+    'Tuổi tôm', 'Mực nước']
+
+output_folder = "output"
+
+
+
+categorical_col = ['Date','Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm','units']
+
+categorical_usecol = [
+    'Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm'
+    ]
+
+
+zscore_lim =  3
 
 
 
@@ -70,6 +104,7 @@ def plot_result(y_test,y_pred,output_column,modelname: str):
                     s=10,
                     color=matplotlib.cm.tab20.colors[0])
         lim = [plt.xlim()[0],plt.xlim()[1]]
+        
         plt.plot(lim,lim,
                 color='grey')
         plt.title(col,
@@ -77,8 +112,7 @@ def plot_result(y_test,y_pred,output_column,modelname: str):
         error_text = f"RMSE: {root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}" + "\n" +\
                      f"MAE: {mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"+ "\n" +\
                      f"MAPE: {mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}%"+ "\n" +\
-                     f"R2 Score: {r2_score(y_test[:,i],y_pred[:,i]):.3f}"
-                     
+                     f"R2 Score: {r2_score(y_test[:,i],y_pred[:,i]):.3f}"          
         plt.text(x=lim[0]+(lim[1]-lim[0])*0.1,
                  y=lim[0]+(lim[1]-lim[0])*0.9,
                  s=error_text)
@@ -96,10 +130,10 @@ def plot_result(y_test,y_pred,output_column,modelname: str):
     # print(y_pred[:,0])
 
     fig2 = plt.figure(figsize = [8,8])
-    ind = np.argsort(y_pred[:,0])
+    ind = np.argsort(y_test[:,0])
     # print(ind)
-    plt.plot(y_pred[ind],label="True value")
-    plt.plot(y_test[ind],label="Predict value",
+    plt.plot(y_test[ind],label="True value")
+    plt.plot(y_pred[ind],label="Predict value",
              ls="",
              marker="x")
     plt.legend()
@@ -110,7 +144,7 @@ def plot_result(y_test,y_pred,output_column,modelname: str):
 
 def readdata() -> pd.DataFrame:
     consolelog("Read data!")
-    df = pd.read_csv("./../../dataset/data1.csv", usecols=columns)
+    df = pd.read_csv("./../../dataset/data_4perday_cleaned.csv", usecols=columns)
 
     # Rename columns Amoni -> Tan 
     df.rename({'Amoni':'TAN'},axis=1,inplace=True)
@@ -133,7 +167,7 @@ def datacleaning(df: pd.DataFrame) -> pd.DataFrame:
     # convert 'Tuoi tom' column to numeric
     # cell which is not able to convert to float (#REF) will be fill as NaN
     df['Tuổi tôm'] = df['Tuổi tôm'].apply(lambda x: 
-                                        int(float(x)) if x.replace('.','',1).isnumeric() 
+                                        int(float(x)) if str(x).replace('.','',1).isnumeric() 
                                         else np.NaN)
     
     df['units'] = df.apply(lambda x:  f"{x['Vụ nuôi'].replace(' ','')}-{x['module_name']}-{x['ao']}" ,axis=1)
@@ -179,28 +213,28 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     # nextday columns
     # Tạo thêm cột nextday-column chứa dữ liệu của ngày tiếp theo (output)
     
-    df[output_column] = np.NaN
+    df1[output_column] = np.NaN
 
     # Copy data của ngày hôm trước cho mỗi row
-    unit_l = list(df['units'].unique())
+    unit_l = list(df1['units'].unique())
     for unit in unit_l:
-        df.loc[df['units']==unit,output_column] = df.loc[df['units']==unit,todayparam].shift(-1).to_numpy(copy=True)
-    df.dropna(axis=0,inplace=True)
-    print(df.head())
+        df1.loc[df1['units']==unit,output_column] = df1.loc[df1['units']==unit,todayparam].shift(-1).to_numpy(copy=True)
+    df1.dropna(axis=0,inplace=True)
+    # print(df1.head())
 
 
     #-----------------------------------------------------#
     #
     #-----------------------------------------------------#
 
-    df = df[input_col + todayparam + output_column].copy()
-    df.reset_index(drop=True,inplace=True)
+    df1 = df1[input_col + todayparam + output_column].copy()
+    df1.reset_index(drop=True,inplace=True)
 
     df1.to_csv(os.path.join(output_folder,"databeforetrain1.csv"))
 
     consolelog("Plot data!")
     plt.figure(figsize=(10,5))
-    sns.boxenplot(df)
+    sns.boxenplot(df1)
     ax = plt.gca()
     ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
     # plt.show()
@@ -209,15 +243,16 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
 
     consolelog("One hot encorder")
     oh_enc = OneHotEncoder(sparse_output=False)
-    oh_enc.fit(df[categorical_usecol])
-    oh_df = pd.DataFrame(oh_enc.transform(df[categorical_usecol]),
+    oh_enc.fit(df1[categorical_usecol])
+    oh_df = pd.DataFrame(oh_enc.transform(df1[categorical_usecol]),
                      columns=oh_enc.get_feature_names_out()
                     )
     print(oh_df.columns)
-    df = pd.concat([oh_df,df],axis=1)
-    df.drop(categorical_usecol,inplace=True,axis=1)
+    df1 = pd.concat([oh_df,df1],axis=1)
+    df1.drop(categorical_usecol,inplace=True,axis=1)
+    print(df1.head())
 
-    return df
+    return df1
 
 
 def RandomForest_model(X, y):
@@ -339,13 +374,15 @@ def ANNModel(X,y):
 
     # define the model
     model1 = Sequential()
-    model1.add(Input(shape=(19,)))
-    model1.add(Dense(15, kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Input(shape=(18,)))
+    model1.add(Dense(100, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
-    model1.add(Dense(10,kernel_initializer='he_uniform', activation='relu'))
-    model1.add(Dropout(0.1))
-    model1.add(Dense(5, kernel_initializer='he_uniform', activation='relu'))
-    model1.add(Dropout(0.1))
+    # model1.add(Dense(40, kernel_initializer='he_uniform', activation='relu'))
+    # model1.add(Dropout(0.1))
+    # model1.add(Dense(32,kernel_initializer='he_uniform', activation='relu'))
+    # model1.add(Dropout(0.1))
+    # model1.add(Dense(5, kernel_initializer='he_uniform', activation='relu'))
+    # model1.add(Dropout(0.1))
     model1.add(Dense(1))
     model1.compile(loss='mae', 
                    optimizer='nadam',
@@ -415,7 +452,7 @@ def noname():
 
     # RandomForest_model(X,y)
     # SVRModel(X,y)
-    # ANNModel(X,y)
+    ANNModel(X,y)
 
 
 

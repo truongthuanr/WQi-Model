@@ -1,8 +1,45 @@
 from helper import consolelog
-from config import columns, input_col, categorical_col, output_column, categorical_usecol
-from config import output_folder
-from config import zscore_lim
+# from config import columns, categorical_col, output_column, categorical_usecol
+# from config import output_folder
+# from config import zscore_lim
 
+
+columns = ['Date', 'Season', 'Vụ nuôi', 'module_name', 'ao', 
+           'Ngày thả', 'Time','Nhiệt độ', 'pH', 'Độ mặn', 
+           'TDS', 'Độ đục', 'DO', 'Độ màu', 'Độ trong','Độ kiềm', 
+           'Độ cứng','Loại ao', 'Công nghệ nuôi', 'area', 
+           'Giống tôm', 'Tuổi tôm', 'Mực nước', 'Amoni', 
+           'Nitrat', 'Nitrit', 'Silica', 'Canxi', 'Kali', 'Magie']
+
+# input_col = ['Season', 'Ngày thả', 'Nhiệt độ', 'pH', 'Độ mặn', 
+#            'TDS', 'Độ đục', 'DO', 'Độ màu', 'Độ trong', 
+#            'Loại ao', 'Công nghệ nuôi', 'area', 
+#            'Giống tôm', 'Tuổi tôm', 'Mực nước']
+
+
+input_col = [
+    'Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm', 
+    'Ngày thả', 'Nhiệt độ', 'pH', 'Độ mặn', 
+    #    'TDS', 'Độ đục', 'DO',
+    # 'Độ trong', 
+    'area', 
+    'Tuổi tôm', 
+    # 'Mực nước'
+    ]
+
+output_folder = "output"
+
+
+
+categorical_col = ['Date','Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm','units']
+
+categorical_usecol = [
+    'Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm'
+    ]
+
+# output_column = ['TAN', 'Nitrat', 'Nitrit', 'Silica', 'Canxi', 'Kali', 'Magie', 'Độ kiềm', 'Độ cứng']
+output_column = ['Độ kiềm']
+zscore_lim =  3
 
 
 import os
@@ -21,6 +58,7 @@ from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error, r
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import RandomizedSearchCV
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from tensorflow.keras.layers import Dense, Input, Dropout
 from sklearn.linear_model import SGDRegressor
 from keras.models import Sequential
@@ -335,6 +373,94 @@ def ANNModel(X,y):
     y_pred = model1.predict(X_sc.transform(X_test))
     plot_result(y_test=y_test.to_numpy(),y_pred=y_sc.inverse_transform(y_pred),output_column=output_column,modelname="ANN")
 
+def LinearRegression_model(X, y):
+
+    X_train, X_test, y_train, y_test = train_test_split(
+                        X, y, test_size=0.33, random_state=42)
+    X_sc = StandardScaler()
+    X_sc.fit(X_train)
+    X_train_tf = X_sc.transform(X_train)
+
+    y_sc = StandardScaler()
+    y_sc.fit(y_train)
+    y_train_tf = y_sc.transform(y_train)
+
+    consolelog("Create Linear Regression model")
+    
+    lr = LinearRegression()
+
+    consolelog("Training...")
+    lr.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+
+    lr.score(X_sc.transform(X_test),y_sc.transform(y_test))
+    y_pred = lr.predict(X_sc.transform(X_test))
+    y_pred = np.reshape(y_pred,(-1,1))
+
+    plot_result(y_test=y_test.to_numpy(),
+                y_pred=y_sc.inverse_transform(y_pred), 
+                output_column=output_column,
+                modelname="Linear Regression")
+    
+
+    rr = Ridge()
+
+    consolelog("Training...")
+    rr.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+
+    rr.score(X_sc.transform(X_test),y_sc.transform(y_test))
+    y_pred = rr.predict(X_sc.transform(X_test))
+    y_pred = np.reshape(y_pred,(-1,1))
+
+    plot_result(y_test=y_test.to_numpy(),
+                y_pred=y_sc.inverse_transform(y_pred), 
+                output_column=output_column,
+                modelname="Ridge Regression")
+    
+
+    # lasr = Lasso()
+
+    # consolelog("Training...")
+    # lasr.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+
+    # lasr.score(X_sc.transform(X_test),y_sc.transform(y_test))
+    # y_pred = lasr.predict(X_sc.transform(X_test))
+    # y_pred = np.reshape(y_pred,(-1,1))
+
+    # plot_result(y_test=y_test.to_numpy(),
+    #             y_pred=y_sc.inverse_transform(y_pred), 
+    #             output_column=output_column,
+    #             modelname="Lasso Regression")
+    
+
+
+# def NonLinearRegression_model(X, y):
+
+#     X_train, X_test, y_train, y_test = train_test_split(
+#                         X, y, test_size=0.33, random_state=42)
+#     X_sc = StandardScaler()
+#     X_sc.fit(X_train)
+#     X_train_tf = X_sc.transform(X_train)
+
+#     y_sc = StandardScaler()
+#     y_sc.fit(y_train)
+#     y_train_tf = y_sc.transform(y_train)
+
+#     consolelog("Create Non Linear Regression model")
+    
+#      = ()
+
+#     consolelog("Training...")
+#     lr.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+
+#     lr.score(X_sc.transform(X_test),y_sc.transform(y_test))
+#     y_pred = lr.predict(X_sc.transform(X_test))
+#     y_pred = np.reshape(y_pred,(-1,1))
+
+#     plot_result(y_test=y_test.to_numpy(),
+#                 y_pred=y_sc.inverse_transform(y_pred), 
+#                 output_column=output_column,
+#                 modelname="NonLinearRegression")
+
 
 def get_random_grid():
     # Number of trees in random forest
@@ -390,7 +516,8 @@ def noname():
 
     # RandomForest_model(X,y)
     # SVRModel(X,y)
-    ANNModel(X,y)
+    # ANNModel(X,y)
+    LinearRegression_model(X,y)
 
 
 
