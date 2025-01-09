@@ -352,7 +352,7 @@ def get_random_grid():
     # Minimum number of samples required at each leaf node
     min_samples_leaf = [1, 2, 4]
     # Method of selecting samples for training each tree
-    bootstrap = [True, False]
+    bootstrap = [True, False]git
     # Create the random grid
     random_grid = {'n_estimators': n_estimators,
                 'max_features': max_features,
