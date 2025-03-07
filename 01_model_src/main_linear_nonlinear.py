@@ -4,37 +4,60 @@ from helper import consolelog
 # from config import zscore_lim
 
 
-columns = ['Date', 'Season', 'Vụ nuôi', 'module_name', 'ao', 
+columns = ['Date', 
+           'Season', 
+           'Vụ nuôi', 'module_name', 'ao', 
            'Ngày thả', 'Time','Nhiệt độ', 'pH', 'Độ mặn', 
            'TDS', 'Độ đục', 'DO', 'Độ màu', 'Độ trong','Độ kiềm', 
-           'Độ cứng','Loại ao', 'Công nghệ nuôi', 'area', 
-           'Giống tôm', 'Tuổi tôm', 'Mực nước', 'Amoni', 
-           'Nitrat', 'Nitrit', 'Silica', 'Canxi', 'Kali', 'Magie']
-
-# input_col = ['Season', 'Ngày thả', 'Nhiệt độ', 'pH', 'Độ mặn', 
-#            'TDS', 'Độ đục', 'DO', 'Độ màu', 'Độ trong', 
-#            'Loại ao', 'Công nghệ nuôi', 'area', 
-#            'Giống tôm', 'Tuổi tôm', 'Mực nước']
+           'Độ cứng',
+           'Loại ao',
+           'Công nghệ nuôi', 
+           'area', 
+           'Giống tôm',
+           'Tuổi tôm', 
+           'Mực nước', 'Amoni', 
+           'Nitrat', 'Nitrit', 'Silica',
+            #  'Canxi', 'Kali', 'Magie'
+             ]
 
 
 input_col = [
-    'Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm', 
-    'Ngày thả', 'Nhiệt độ', 'pH', 'Độ mặn', 
-    #    'TDS', 'Độ đục', 'DO',
-    # 'Độ trong', 
-    'area', 
-    'Tuổi tôm', 
-    # 'Mực nước'
+     # thông số đặc tính
+    'Season', 
+    'Loại ao', 
+    'Công nghệ nuôi', 
+    'Giống tôm',  
+    'Mực nước',
+    'Tuổi tôm',
+     'area', 
+    'Nhiệt độ', 'pH', 'DO', # thông số bắt buộc
+    # 'Ngày thả',
+    # 'Độ mặn', 
+    'TDS', 
+    'Độ đục',
+    'Độ trong',
+    #phase 2 
+    'Độ cứng',
+    'Độ màu',
+    'Silica',
     ]
 
 output_folder = "output"
 
 
 
-categorical_col = ['Date','Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm','units']
+categorical_col = ['Date',
+                   'Season', 
+                   'Loại ao', 
+                   'Công nghệ nuôi', 
+                   'Giống tôm',
+                   'units']
 
 categorical_usecol = [
-    'Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm'
+    'Season', 
+    'Loại ao', 
+    'Công nghệ nuôi', 
+    'Giống tôm'
     ]
 
 # output_column = ['TAN', 'Nitrat', 'Nitrit', 'Silica', 'Canxi', 'Kali', 'Magie', 'Độ kiềm', 'Độ cứng']
@@ -400,6 +423,8 @@ def LinearRegression_model(X, y):
                 y_pred=y_sc.inverse_transform(y_pred), 
                 output_column=output_column,
                 modelname="Linear Regression")
+    
+    [print(f"{num:.3f}") for num in lr.coef_]
     
 
     rr = Ridge()

@@ -274,8 +274,8 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
 def RandomForest_model(X, y):
 
     with open("./output/randomforest_error.csv","w+") as f:
-        f.writeline("Set, MRSE, MAE, MAPE(%), R2Score\n")
-        for random_state in range(1,10):
+        f.write("Set, MRSE, MAE, MAPE(%), R2Score\n")
+        for random_state in range(1,201):
 
             X_train, X_test, y_train, y_test = train_test_split(
                                 X, y, test_size=0.33, random_state=random_state)
@@ -311,16 +311,17 @@ def RandomForest_model(X, y):
             # print(f"{type(y_pred)=}")
             # print(f"{y_pred.shape=}")
             # print(f"{y_test.to_numpy().shape=}")
-            y_test_tf = y_sc.transform(y_test)
+
+            y_test=y_test.to_numpy()
+            y_pred=y_sc.inverse_transform(y_pred)
             i=0
             RMSE = f"{root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}"
             MAE  = f"{mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"
             MAPE = f"{mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"
             R2Score =  f"{r2_score(y_test[:,i],y_pred[:,i]):.3f}"
-            f.write(f"{RMSE},{MAE},{MAPE},{R2Score}\n")          
+            f.write(f"{random_state},{RMSE},{MAE},{MAPE},{R2Score}\n")          
 
 
-            # plot_result(y_sc.transform(y_test),y_pred, output_column,modelname="RandomForest")
             # plot_result(y_test=y_test.to_numpy(),
             #             y_pred=y_sc.inverse_transform(y_pred), 
             #             output_column=output_column,
@@ -476,8 +477,9 @@ def noname():
     # get_random_grid()
 
     # RandomForest_model(X,y)
+    print(input_col)
     # SVRModel(X,y)
-    ANNModel(X,y)
+    # ANNModel(X,y)
 
 
 

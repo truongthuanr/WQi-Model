@@ -20,7 +20,9 @@ from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error, r
                             mean_absolute_percentage_error
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import PolynomialFeatures
 from sklearn.model_selection import RandomizedSearchCV
+from sklearn.inspection import permutation_importance
 from tensorflow.keras.layers import Dense, Input, Dropout
 from sklearn.linear_model import SGDRegressor
 from keras.models import Sequential
@@ -35,12 +37,12 @@ columns = ['Date',
            'TDS', 'Độ đục', 'DO', 'Độ màu', 'Độ trong','Độ kiềm', 
            'Độ cứng',
            'Loại ao',
-            #  'Công nghệ nuôi', 
+             'Công nghệ nuôi', 
              'area', 
         #    'Giống tôm',
-             'Tuổi tôm', 
-             'Mực nước', 'Amoni', 
-           'Nitrat', 'Nitrit', 'Silica',
+            'Tuổi tôm', 
+            'Mực nước', 'Amoni', 
+            'Nitrat', 'Nitrit', 'Silica',
             #  'Canxi', 'Kali', 'Magie'
              ]
 
@@ -49,7 +51,7 @@ input_col = [
      # thông số đặc tính
     'Season', 
     'Loại ao', 
-    # 'Công nghệ nuôi', 
+    'Công nghệ nuôi', 
     # 'Giống tôm',  
     'Mực nước',
     'Tuổi tôm',
@@ -73,14 +75,14 @@ output_folder = "output"
 categorical_col = ['Date',
                    'Season', 
                    'Loại ao', 
-                #    'Công nghệ nuôi', 
+                   'Công nghệ nuôi', 
                 #    'Giống tôm',
                    'units']
 
 categorical_usecol = [
     'Season', 
     'Loại ao', 
-    # 'Công nghệ nuôi', 
+    'Công nghệ nuôi', 
     # 'Giống tôm'
     ]
 
@@ -272,7 +274,7 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
 def RandomForest_model(X, y):
 
     X_train, X_test, y_train, y_test = train_test_split(
-                        X, y, test_size=0.33, random_state=42)
+                        X, y, test_size=0.33, random_state=1)
     X_sc = StandardScaler()
     X_sc.fit(X_train)
     X_train_tf = X_sc.transform(X_train)
@@ -291,9 +293,19 @@ def RandomForest_model(X, y):
                                random_state=0,
                                bootstrap=False,
                                verbose=1,)
+    
+    
 
     consolelog("Training...")
     rf.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+
+
+    imp_feats = rf.feature_importances_
+    std = np.std([tree.feature_importances_ for tree in rf.estimators_], axis=0)
+    print(f"------------------")
+
+    print(f"Feature Importance: {imp_feats}")
+    print(f"{std=}")
 
     rf.score(X_sc.transform(X_test),y_sc.transform(y_test))
     y_pred = rf.predict(X_sc.transform(X_test))
@@ -335,7 +347,7 @@ def RandomForest_model(X, y):
 
 def SVRModel(X,y):
     X_train, X_test, y_train, y_test = train_test_split(
-                        X, y, test_size=0.33, random_state=42)
+                        X, y, test_size=0.33, random_state=1)
     X_sc = StandardScaler()
     X_sc.fit(X_train)
     X_train_tf = X_sc.transform(X_train)
@@ -344,7 +356,7 @@ def SVRModel(X,y):
     y_sc.fit(y_train)
     y_train_tf = y_sc.transform(y_train)
 
-    consolelog("Create SGD Regressor")
+    consolelog("Create SVR Regressor")
 
     SVRreg = svm.SVR(kernel='rbf',epsilon=0.5,C=10)
     # print(f"{X_train.shape=} {y_train.shape=}")
@@ -358,6 +370,20 @@ def SVRModel(X,y):
             y_pred=y_sc.inverse_transform(y_pred), 
             output_column=output_column,
             modelname="SVRModel")
+    
+    r = permutation_importance(estimator=SVRreg, 
+                               X=X_sc.transform(X_test), 
+                               y=y_sc.transform(y_test),
+                                n_repeats=200,
+                                random_state=42)
+    # for i in r.importances_mean.argsort()[::-1]:
+    #     if r.importances_mean[i] - 2 * r.importances_std[i] > 0:
+    #         print(f"{X.columns[i]:<30}"
+    #           f"{r.importances_mean[i]:.3f}"
+    #           f" +/- {r.importances_std[i]:.3f}")
+    print(f"{X.columns=}")
+    print(f"{r.importances_mean}")
+    print(f"{r.importances_std}")
     
     # Random searchCV
     # SVRreg = svm.SVR()
@@ -404,17 +430,22 @@ def ANNModel(X,y):
     model1.summary()
 
     history = model1.fit(X_train_tf,y_train_tf,
-                epochs=1000,
+                epochs=300,
                 batch_size=32,
                 verbose=True,
                 validation_split=0.2)
+    print(f"{model1.get_weights()[0]=}")
+    print(f"{model1.get_weights()[0].shape=}")
+
+
     plot_history(history.history)
 
     y_pred = model1.predict(X_sc.transform(X_test))
     plot_result(y_test=y_test.to_numpy(),y_pred=y_sc.inverse_transform(y_pred),output_column=output_column,modelname="ANN")
 
 
-    
+
+
 def get_random_grid():
     # Number of trees in random forest
     n_estimators = [int(x) for x in np.linspace(start = 200, stop = 2000, num = 10)]
@@ -469,9 +500,9 @@ def noname():
     y = df[output_column]
     # get_random_grid()
 
-    # RandomForest_model(X,y)
+    RandomForest_model(X,y)
     # SVRModel(X,y)
-    ANNModel(X,y)
+    # ANNModel(X,y)
 
 
 
