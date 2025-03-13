@@ -19,7 +19,7 @@ from sklearn.multioutput import MultiOutputRegressor
 from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error, root_mean_squared_error,\
                             mean_absolute_percentage_error
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.inspection import permutation_importance
@@ -27,6 +27,7 @@ from tensorflow.keras.layers import Dense, Input, Dropout
 from sklearn.linear_model import SGDRegressor
 from keras.models import Sequential
 from sklearn import svm
+from scikeras.wrappers import KerasRegressor
 import matplotlib
 
 
@@ -58,14 +59,14 @@ input_col = [
      'area', 
     'Nhiệt độ', 'pH', 'DO', # thông số bắt buộc
     # 'Ngày thả',
-    # 'Độ mặn', 
+    'Độ mặn', 
     'TDS', 
     'Độ đục',
     'Độ trong',
     #phase 2 
     'Độ cứng',
     'Độ màu',
-    'Silica',
+    # 'Silica',
     ]
 
 output_folder = "output"
@@ -283,7 +284,7 @@ def RandomForest_model(X, y):
     y_sc.fit(y_train)
     y_train_tf = y_sc.transform(y_train)
 
-    consolelog("Create MultiOutput RandomForeest")
+    consolelog("Create RandomForeest")
     
     rf = RandomForestRegressor(n_estimators=800,
                                max_depth=50,
@@ -345,6 +346,46 @@ def RandomForest_model(X, y):
     # rf_random.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
     # print(rf_random.best_params_)
 
+
+def GradientBoost_model(X, y):
+
+    X_train, X_test, y_train, y_test = train_test_split(
+                        X, y, test_size=0.33, random_state=1)
+    X_sc = StandardScaler()
+    X_sc.fit(X_train)
+    X_train_tf = X_sc.transform(X_train)
+
+    y_sc = StandardScaler()
+    y_sc.fit(y_train)
+    y_train_tf = y_sc.transform(y_train)
+
+    consolelog("Create Gradient Boosting Regressor")
+    
+    gbr = GradientBoostingRegressor(n_estimators=800,
+                               max_depth=50,
+                               min_samples_split=2,
+                               min_samples_leaf=2,
+                               max_features='sqrt', 
+                               loss='squared_error',
+                               random_state=0,
+                               verbose=1,)
+
+    
+    
+
+    consolelog("Training...")
+    gbr.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+    r = permutation_importance(estimator=gbr, 
+                               X=X_train_tf, 
+                               y=np.reshape(y_train_tf,(-1)),
+                                n_repeats=200,
+                                random_state=42)
+    print(f"{X.columns=}")
+    print(f"{r.importances_mean}")
+    print(f"{r.importances_std}")
+    print("----- End Gradient Boosting Regressor --------")
+
+
 def SVRModel(X,y):
     X_train, X_test, y_train, y_test = train_test_split(
                         X, y, test_size=0.33, random_state=1)
@@ -372,8 +413,11 @@ def SVRModel(X,y):
             modelname="SVRModel")
     
     r = permutation_importance(estimator=SVRreg, 
-                               X=X_sc.transform(X_test), 
-                               y=y_sc.transform(y_test),
+                            #    X=X_sc.transform(X_test), 
+                               X=X_train_tf, 
+                            #    y=y_sc.transform(y_test),
+                               y=np.reshape(y_train_tf,(-1)),
+
                                 n_repeats=200,
                                 random_state=42)
     # for i in r.importances_mean.argsort()[::-1]:
@@ -397,6 +441,8 @@ def SVRModel(X,y):
     #                                n_jobs = -1)
     # rf_random.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
     # print(rf_random.best_params_)
+    print("----- End Support Vector Regressor --------")
+
 
 
 def ANNModel(X,y):
@@ -471,6 +517,50 @@ def get_random_grid():
     return random_grid
 
 
+def wrapAnn():
+    model1 = Sequential()
+    model1.add(Input(shape=(19,)))
+    model1.add(Dense(32, kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dropout(0.1))
+    model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dropout(0.1))
+    model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dropout(0.1))
+    model1.add(Dense(1))
+    model1.compile(loss='mae', 
+                   optimizer='nadam',
+                   metrics=['accuracy','r2_score']
+                   )
+    return model1
+
+def permutationAnn(X,y):
+    X_train, X_test, y_train, y_test = train_test_split(
+                            X, y, test_size=0.33, random_state=42)
+
+    X_sc = StandardScaler()
+    X_sc.fit(X_train)
+    X_train_tf = X_sc.transform(X_train)
+    print(f"{X_train_tf.shape}")
+    y_sc = StandardScaler()
+    y_sc.fit(y_train)
+    y_train_tf = y_sc.transform(y_train)
+    print(f"{y_train_tf.shape}")
+
+    model = KerasRegressor(build_fn=wrapAnn,
+                           epochs=100,
+                           batch_size=64,
+                           verbose=True
+                               )
+    model.fit(X_train_tf,y_train_tf)
+    r = permutation_importance(model,
+                                         X=X_train_tf,
+                                         y=y_train_tf,
+                                         random_state=42)
+    print(f"{X.columns=}")
+    print(f"{r.importances_mean}")
+    print(f"{r.importances_std}")
+
+
 def getsvrgrid():
     kernel = ['linear', 'poly', 'rbf', 'sigmoid']
     C = [0.1, 1.0, 10.0, 100.0], 
@@ -500,9 +590,11 @@ def noname():
     y = df[output_column]
     # get_random_grid()
 
-    RandomForest_model(X,y)
-    # SVRModel(X,y)
+    # RandomForest_model(X,y)
+    GradientBoost_model(X,y)
+    SVRModel(X,y)
     # ANNModel(X,y)
+    # permutationAnn(X,y)
 
 
 
