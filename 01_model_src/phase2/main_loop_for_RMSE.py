@@ -24,9 +24,11 @@ from sklearn.multioutput import MultiOutputRegressor
 from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error, root_mean_squared_error,\
                             mean_absolute_percentage_error
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from sklearn.model_selection import RandomizedSearchCV
 from tensorflow.keras.layers import Dense, Input, Dropout
+from tensorflow.keras.models import clone_model
 from sklearn.linear_model import SGDRegressor
 from keras.models import Sequential
 from sklearn import svm
@@ -61,14 +63,14 @@ input_col = [
      'area', 
     'Nhiệt độ', 'pH', 'DO', # thông số bắt buộc
     # 'Ngày thả',
-    # 'Độ mặn', 
+    'Độ mặn', 
     'TDS', 
     'Độ đục',
     'Độ trong',
     #phase 2 
     'Độ cứng',
     'Độ màu',
-    'Silica',
+    # 'Silica',
     ]
 
 output_folder = "output"
@@ -272,11 +274,10 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
 
 
 def RandomForest_model(X, y):
-
     with open("./output/randomforest_error.csv","w+") as f:
         f.write("Set, MRSE, MAE, MAPE(%), R2Score\n")
         for random_state in range(1,201):
-
+            print(f"----- Loop {random_state} ------")
             X_train, X_test, y_train, y_test = train_test_split(
                                 X, y, test_size=0.33, random_state=random_state)
             X_sc = StandardScaler()
@@ -285,7 +286,7 @@ def RandomForest_model(X, y):
             y_sc = StandardScaler()
             y_sc.fit(y_train)
             y_train_tf = y_sc.transform(y_train)
-            consolelog("Create MultiOutput RandomForeest")
+            # consolelog("Create MultiOutput RandomForest")
             rf = RandomForestRegressor(n_estimators=800,
                                     max_depth=50,
                                     min_samples_split=2,
@@ -341,62 +342,104 @@ def RandomForest_model(X, y):
             # print(rf_random.best_params_)
 
 def SVRModel(X,y):
-    X_train, X_test, y_train, y_test = train_test_split(
-                        X, y, test_size=0.33, random_state=42)
-    X_sc = StandardScaler()
-    X_sc.fit(X_train)
-    X_train_tf = X_sc.transform(X_train)
+    with open("./output/SVR_error.csv","w+") as f:
+        f.write("Set, MRSE, MAE, MAPE(%), R2Score\n")
 
-    y_sc = StandardScaler()
-    y_sc.fit(y_train)
-    y_train_tf = y_sc.transform(y_train)
+        for random_state in range(1,201):
+            print(f"----- Loop {random_state} ------")
+            X_train, X_test, y_train, y_test = train_test_split(
+                                X, y, test_size=0.33, random_state=random_state)
+            X_sc = StandardScaler()
+            X_sc.fit(X_train)
+            X_train_tf = X_sc.transform(X_train)
 
-    consolelog("Create SGD Regressor")
+            y_sc = StandardScaler()
+            y_sc.fit(y_train)
+            y_train_tf = y_sc.transform(y_train)
 
-    SVRreg = svm.SVR(kernel='rbf',epsilon=0.5,C=10)
-    # print(f"{X_train.shape=} {y_train.shape=}")
-    SVRreg.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+            # consolelog("Create SGD Regressor")
 
-    y_pred = SVRreg.predict(X_sc.transform(X_test))
-    y_pred = np.reshape(y_pred,(-1,1))
+            SVRreg = svm.SVR(kernel='rbf',epsilon=0.5,C=10)
+            # print(f"{X_train.shape=} {y_train.shape=}")
+            SVRreg.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+
+            y_pred = SVRreg.predict(X_sc.transform(X_test))
+            y_pred = np.reshape(y_pred,(-1,1))
+            
+            y_test=y_test.to_numpy()
+            y_pred=y_sc.inverse_transform(y_pred)
+            i=0
+            RMSE = f"{root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}"
+            MAE  = f"{mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"
+            MAPE = f"{mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"
+            R2Score =  f"{r2_score(y_test[:,i],y_pred[:,i]):.3f}"
+            f.write(f"{random_state},{RMSE},{MAE},{MAPE},{R2Score}\n")   
 
 
-    plot_result(y_test=y_test.to_numpy(),
-            y_pred=y_sc.inverse_transform(y_pred), 
-            output_column=output_column,
-            modelname="SVRModel")
+        # plot_result(y_test=y_test.to_numpy(),
+        #         y_pred=y_sc.inverse_transform(y_pred), 
+        #         output_column=output_column,
+        #         modelname="SVRModel")
+        
+        # Random searchCV
+        # SVRreg = svm.SVR()
+        # random_grid = getsvrgrid()
+        # rf_random = RandomizedSearchCV(estimator = SVRreg, 
+        #                                param_distributions = random_grid, 
+        #                                n_iter = 100, 
+        #                                cv = 3, 
+        #                                verbose=2, 
+        #                                random_state=42, 
+        #                                n_jobs = -1)
+        # rf_random.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+        # print(rf_random.best_params_)
+
+def GradientBoostedTreeModel(X,y):
+    with open("./output/GradientBoostedTree_error.csv","w+") as f:
+        f.write("Set, MRSE, MAE, MAPE(%), R2Score\n")
+
+        for random_state in range(1,201):
+            print(f"----- Loop {random_state} ------")
+            X_train, X_test, y_train, y_test = train_test_split(
+                                X, y, test_size=0.33, random_state=random_state)
+            X_sc = StandardScaler()
+            X_sc.fit(X_train)
+            X_train_tf = X_sc.transform(X_train)
+
+            y_sc = StandardScaler()
+            y_sc.fit(y_train)
+            y_train_tf = y_sc.transform(y_train)
+
+
+            gbr = GradientBoostingRegressor(n_estimators=800,
+                               max_depth=50,
+                               min_samples_split=2,
+                               min_samples_leaf=2,
+                               max_features='sqrt', 
+                               loss='squared_error',
+                               random_state=0,
+                               verbose=0,)
+
     
-    # Random searchCV
-    # SVRreg = svm.SVR()
-    # random_grid = getsvrgrid()
-    # rf_random = RandomizedSearchCV(estimator = SVRreg, 
-    #                                param_distributions = random_grid, 
-    #                                n_iter = 100, 
-    #                                cv = 3, 
-    #                                verbose=2, 
-    #                                random_state=42, 
-    #                                n_jobs = -1)
-    # rf_random.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
-    # print(rf_random.best_params_)
+            gbr.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
 
+            y_pred = gbr.predict(X_sc.transform(X_test))
+            y_pred = np.reshape(y_pred,(-1,1))
+            
+            y_test=y_test.to_numpy()
+            y_pred=y_sc.inverse_transform(y_pred)
+            i=0
+            RMSE = f"{root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}"
+            MAE  = f"{mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"
+            MAPE = f"{mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"
+            R2Score =  f"{r2_score(y_test[:,i],y_pred[:,i]):.3f}"
+            f.write(f"{random_state},{RMSE},{MAE},{MAPE},{R2Score}\n")   
 
 def ANNModel(X,y):
 
-    X_train, X_test, y_train, y_test = train_test_split(
-                            X, y, test_size=0.33, random_state=42)
-
-    X_sc = StandardScaler()
-    X_sc.fit(X_train)
-    X_train_tf = X_sc.transform(X_train)
-    print(f"{X_train_tf.shape}")
-    y_sc = StandardScaler()
-    y_sc.fit(y_train)
-    y_train_tf = y_sc.transform(y_train)
-    print(f"{y_train_tf.shape}")
-
     # define the model
     model1 = Sequential()
-    model1.add(Input(shape=(16,)))
+    model1.add(Input(shape=(21,)))
     model1.add(Dense(32, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
     model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
@@ -410,17 +453,140 @@ def ANNModel(X,y):
                    )
     model1.summary()
 
-    history = model1.fit(X_train_tf,y_train_tf,
-                epochs=1000,
-                batch_size=32,
-                verbose=True,
-                validation_split=0.2)
-    plot_history(history.history)
+    with open("./output/ANN_error.csv","w+") as f:
+        f.write("Set, MRSE, MAE, MAPE(%), R2Score\n")
 
-    y_pred = model1.predict(X_sc.transform(X_test))
-    plot_result(y_test=y_test.to_numpy(),y_pred=y_sc.inverse_transform(y_pred),output_column=output_column,modelname="ANN")
+        for random_state in range(1,201):
+            print(f"----- Loop {random_state} ------")    
+
+            X_train, X_test, y_train, y_test = train_test_split(
+                                    X, y, test_size=0.33, random_state=42)
+
+            X_sc = StandardScaler()
+            X_sc.fit(X_train)
+            X_train_tf = X_sc.transform(X_train)
+            print(f"{X_train_tf.shape}")
+            y_sc = StandardScaler()
+            y_sc.fit(y_train)
+            y_train_tf = y_sc.transform(y_train)
+            print(f"{y_train_tf.shape}")
+            model = clone_model(model1)
+            model.compile(loss='mae', 
+                optimizer='nadam',
+                metrics=['accuracy','r2_score']
+                )
 
 
+
+            history = model.fit(X_train_tf,y_train_tf,
+                        epochs=200,
+                        batch_size=32,
+                        verbose=0,
+                        validation_split=0.2)
+            # plot_history(history.history)
+
+            y_pred = model.predict(X_sc.transform(X_test))
+            y_pred = np.reshape(y_pred,(-1,1))
+            
+            y_test=y_test.to_numpy()
+            y_pred=y_sc.inverse_transform(y_pred)
+            i=0
+            RMSE = f"{root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}"
+            MAE  = f"{mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"
+            MAPE = f"{mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"
+            R2Score =  f"{r2_score(y_test[:,i],y_pred[:,i]):.3f}"
+            f.write(f"{random_state},{RMSE},{MAE},{MAPE},{R2Score}\n")
+
+            # plot_result(y_test=y_test.to_numpy(),y_pred=y_sc.inverse_transform(y_pred),output_column=output_column,modelname="ANN")
+
+def LinearModel(X,y):
+    with open("./output/linearmodel_error.csv","w+") as f:
+        f.write("Set, MRSE, MAE, MAPE(%), R2Score\n")
+        for random_state in range(1,201):
+            print(f"----- Loop {random_state} ------")
+            X_train, X_test, y_train, y_test = train_test_split(
+                        X, y, test_size=0.33, random_state=random_state)
+            X_sc = StandardScaler()
+            X_sc.fit(X_train)
+            X_train_tf = X_sc.transform(X_train)
+
+            y_sc = StandardScaler()
+            y_sc.fit(y_train)
+            y_train_tf = y_sc.transform(y_train)
+
+            consolelog("Create Linear Regression model")
+            
+            lr = LinearRegression()
+
+            consolelog("Training...")
+            lr.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+
+            lr.score(X_sc.transform(X_test),y_sc.transform(y_test))
+            y_pred = lr.predict(X_sc.transform(X_test))
+            y_pred = np.reshape(y_pred,(-1,1))
+
+            # plot_result(y_test=y_test.to_numpy(),
+            #             y_pred=y_sc.inverse_transform(y_pred), 
+            #             output_column=output_column,
+            #             modelname="Linear Regression")
+
+            y_test=y_test.to_numpy()
+            y_pred=y_sc.inverse_transform(y_pred)
+            i=0
+            RMSE = f"{root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}"
+            MAE  = f"{mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"
+            MAPE = f"{mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"
+            R2Score =  f"{r2_score(y_test[:,i],y_pred[:,i]):.3f}"
+            f.write(f"{random_state},{RMSE},{MAE},{MAPE},{R2Score}\n")
+
+def polyModel(X: pd.DataFrame, y: pd.DataFrame):
+    print("======= Running poly ========") 
+    with open("./output/polymodel_error.csv","w+") as f:
+        f.write("Set, MRSE, MAE, MAPE(%), R2Score\n")
+        for random_state in range(1,201):
+            X_train, X_test, y_train, y_test = train_test_split(
+                                X, y, test_size=0.33, random_state=random_state)
+            X_sc = StandardScaler()
+            X_sc.fit(X_train)
+            X_train_tf = X_sc.transform(X_train)
+            X_train_tf2 = X_train_tf**2
+            X_train_tf_ = np.hstack((X_train_tf,X_train_tf2))
+            print(f"X_train_tf shape: {np.shape(X_train_tf)}")
+            print(f"X_train_tf2 shape: {np.shape(X_train_tf2)}")
+            print(f"X_train_tf_ shape: {np.shape(X_train_tf_)}")
+
+
+            y_sc = StandardScaler()
+            y_sc.fit(y_train)
+            y_train_tf = y_sc.transform(y_train)
+            
+            lr = LinearRegression()
+
+            consolelog(f"Training... {random_state}")
+            lr.fit(X_train_tf_,np.reshape(y_train_tf,(-1)))
+
+            X_test_tf = X_sc.transform(X_test)
+            X_test_tf2 = X_test_tf**2
+            X_test_tf_ = np.hstack((X_test_tf,X_test_tf2))
+
+
+            lr.score(X_test_tf_,y_sc.transform(y_test))
+            y_pred = lr.predict(X_test_tf_)
+            y_pred = np.reshape(y_pred,(-1,1))
+
+            y_test=y_test.to_numpy()
+            y_pred=y_sc.inverse_transform(y_pred)
+            i=0
+            RMSE = f"{root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}"
+            MAE  = f"{mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"
+            MAPE = f"{mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"
+            R2Score =  f"{r2_score(y_test[:,i],y_pred[:,i]):.3f}"
+            f.write(f"{random_state},{RMSE},{MAE},{MAPE},{R2Score}\n")
+
+            # plot_result(y_test=y_test.to_numpy(),
+            #             y_pred=y_sc.inverse_transform(y_pred), 
+            #             output_column=output_column,
+            #             modelname="Linear Regression")
     
 def get_random_grid():
     # Number of trees in random forest
@@ -477,9 +643,12 @@ def noname():
     # get_random_grid()
 
     # RandomForest_model(X,y)
-    print(input_col)
+    # GradientBoostedTreeModel(X,y)
+    # print(input_col)
     # SVRModel(X,y)
     # ANNModel(X,y)
+    # LinearModel(X,y)
+    polyModel(X,y)
 
 
 

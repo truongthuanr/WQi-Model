@@ -32,14 +32,14 @@ input_col = [
      'area', 
     'Nhiệt độ', 'pH', 'DO', # thông số bắt buộc
     # 'Ngày thả',
-    # 'Độ mặn', 
+    'Độ mặn', 
     'TDS', 
     'Độ đục',
     'Độ trong',
     #phase 2 
     'Độ cứng',
     'Độ màu',
-    'Silica',
+    # 'Silica',
     ]
 
 output_folder = "output"

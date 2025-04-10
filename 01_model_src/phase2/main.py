@@ -24,7 +24,7 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.inspection import permutation_importance
 from tensorflow.keras.layers import Dense, Input, Dropout
-from sklearn.linear_model import SGDRegressor
+from sklearn.linear_model import SGDRegressor, LinearRegression
 from keras.models import Sequential
 from sklearn import svm
 from scikeras.wrappers import KerasRegressor
@@ -461,13 +461,30 @@ def ANNModel(X,y):
 
     # define the model
     model1 = Sequential()
-    model1.add(Input(shape=(16,)))
+    model1.add(Input(shape=(19,)))
+
+    # Layer #
     model1.add(Dense(32, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
-    model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
-    model1.add(Dropout(0.1))
+    # # Layer #
+    # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
+    # model1.add(Dropout(0.1))
+    # # Layer #
+    # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
+    # model1.add(Dropout(0.1))
+    # # Layer #
+    # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
+    # model1.add(Dropout(0.1))
+    # # Layer #
+    # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
+    # model1.add(Dropout(0.1))
+    # # Layer #
+    # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
+    # model1.add(Dropout(0.1))
+    # Layer #
     model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
+
     model1.add(Dense(1))
     model1.compile(loss='mae', 
                    optimizer='nadam',
@@ -478,7 +495,7 @@ def ANNModel(X,y):
     history = model1.fit(X_train_tf,y_train_tf,
                 epochs=300,
                 batch_size=32,
-                verbose=True,
+                verbose=False,
                 validation_split=0.2)
     print(f"{model1.get_weights()[0]=}")
     print(f"{model1.get_weights()[0].shape=}")
@@ -574,8 +591,48 @@ def getsvrgrid():
     
     return random_grid
 
+def poly(X: pd.DataFrame, y: pd.DataFrame):
+    print("======= Running poly ========") 
+   
+    X_train, X_test, y_train, y_test = train_test_split(
+                        X, y, test_size=0.33, random_state=1)
+    X_sc = StandardScaler()
+    X_sc.fit(X_train)
+    X_train_tf = X_sc.transform(X_train)
+    X_train_tf2 = X_train_tf**2
+    X_train_tf_ = np.hstack((X_train_tf,X_train_tf2))
+    print(f"X_train_tf shape: {np.shape(X_train_tf)}")
+    print(f"X_train_tf2 shape: {np.shape(X_train_tf2)}")
+    print(f"X_train_tf_ shape: {np.shape(X_train_tf_)}")
+
+
+    y_sc = StandardScaler()
+    y_sc.fit(y_train)
+    y_train_tf = y_sc.transform(y_train)
+    
+    lr = LinearRegression()
+
+    consolelog("Training...")
+    lr.fit(X_train_tf_,np.reshape(y_train_tf,(-1)))
+
+    X_test_tf = X_sc.transform(X_test)
+    X_test_tf2 = X_test_tf**2
+    X_test_tf_ = np.hstack((X_test_tf,X_test_tf2))
+
+
+    lr.score(X_test_tf_,y_sc.transform(y_test))
+    y_pred = lr.predict(X_test_tf_)
+    y_pred = np.reshape(y_pred,(-1,1))
+
+    plot_result(y_test=y_test.to_numpy(),
+                y_pred=y_sc.inverse_transform(y_pred), 
+                output_column=output_column,
+                modelname="Linear Regression")
+
 
 def noname():
+    # np.set_printoptions(suppress=True)
+    pd.options.display.float_format = '{:.6f}'.format
     df = readdata()
     # print(df.head())
 
@@ -591,10 +648,11 @@ def noname():
     # get_random_grid()
 
     # RandomForest_model(X,y)
-    GradientBoost_model(X,y)
-    SVRModel(X,y)
-    # ANNModel(X,y)
+    # GradientBoost_model(X,y)
+    # SVRModel(X,y)
+    ANNModel(X,y)
     # permutationAnn(X,y)
+    # poly(X,y)
 
 
 
