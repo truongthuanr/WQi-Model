@@ -50,7 +50,7 @@ input_col = [
     'Season', 
     'Loại ao', 
     # 'Công nghệ nuôi', 
-    # 'Giống tôm',  
+    'Giống tôm',  
     'Mực nước',
     'Tuổi tôm',
      'area', 

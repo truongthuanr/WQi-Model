@@ -29,6 +29,8 @@ from keras.models import Sequential
 from sklearn import svm
 from scikeras.wrappers import KerasRegressor
 import matplotlib
+import logging
+
 
 
 columns = ['Date', 
@@ -40,7 +42,7 @@ columns = ['Date',
            'Loại ao',
              'Công nghệ nuôi', 
              'area', 
-        #    'Giống tôm',
+           'Giống tôm',
             'Tuổi tôm', 
             'Mực nước', 'Amoni', 
             'Nitrat', 'Nitrit', 'Silica',
@@ -53,7 +55,7 @@ input_col = [
     'Season', 
     'Loại ao', 
     'Công nghệ nuôi', 
-    # 'Giống tôm',  
+    'Giống tôm',  
     'Mực nước',
     'Tuổi tôm',
      'area', 
@@ -77,14 +79,14 @@ categorical_col = ['Date',
                    'Season', 
                    'Loại ao', 
                    'Công nghệ nuôi', 
-                #    'Giống tôm',
+                   'Giống tôm',
                    'units']
 
 categorical_usecol = [
     'Season', 
     'Loại ao', 
     'Công nghệ nuôi', 
-    # 'Giống tôm'
+    'Giống tôm'
     ]
 
 # output_column = ['TAN', 'Nitrat', 'Nitrit', 'Silica', 'Canxi', 'Kali', 'Magie', 'Độ kiềm', 'Độ cứng']
@@ -93,7 +95,14 @@ zscore_lim =  3
 
 
 
-
+def loginit():
+    global logger 
+    logger = logging.getLogger(__name__)
+    logging.basicConfig(filename=f'{output_folder}/feature_importance.log', 
+                        level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S',
+                        encoding='utf-8')
 
 def plot_result3x3(y_test,y_pred,output_column):
     fig = plt.figure(figsize = [8,8])
@@ -285,6 +294,8 @@ def RandomForest_model(X, y):
     y_train_tf = y_sc.transform(y_train)
 
     consolelog("Create RandomForeest")
+    logger.info("Create RandomForeest")
+
     
     rf = RandomForestRegressor(n_estimators=800,
                                max_depth=50,
@@ -306,31 +317,34 @@ def RandomForest_model(X, y):
     print(f"------------------")
 
     print(f"Feature Importance: {imp_feats}")
+    logger.info(f"Feature Importance: {imp_feats=}")
     print(f"{std=}")
+    logger.info(f"{std=}")
 
-    rf.score(X_sc.transform(X_test),y_sc.transform(y_test))
-    y_pred = rf.predict(X_sc.transform(X_test))
-    y_pred = np.reshape(y_pred,(-1,1))
+    logger.info("Permutation Importance Random Forest")
+    r = permutation_importance(estimator=rf, 
+                               X=X_train_tf, 
+                               y=np.reshape(y_train_tf,(-1)),
+                                n_repeats=200,
+                                random_state=42)
 
-    # for i in range(y_pred.shape[1]):
-    #     plt.subplot(3,3,i+1)
-    #     plt.scatter(y_sc.transform(y_test)[:,i],y_pred[:,i])
-
-    # print(f"{y_sc.inverse_transform(np.reshape(y_pred,(1,-1))).shape=}")
-    # print(f"{type(y_sc.inverse_transform(np.reshape(y_pred,(1,-1))))=}")
-    print(f"{type(y_pred)=}")
-    print(f"{y_pred.shape=}")
-
-    
-    print(f"{y_test.to_numpy().shape=}")
-    print(f"{type(y_test.to_numpy())}")
+    logger.info(f"{X.columns=}")
+    logger.info(f"{r.importances_mean=}")
+    logger.info(f"{r.importances_std=}")
+    print("----- End Random Forest Regressor --------")
 
 
-    # plot_result(y_sc.transform(y_test),y_pred, output_column,modelname="RandomForest")
-    plot_result(y_test=y_test.to_numpy(),
-                y_pred=y_sc.inverse_transform(y_pred), 
-                output_column=output_column,
-                modelname="RandomForest")
+    # rf.score(X_sc.transform(X_test),y_sc.transform(y_test))
+    # y_pred = rf.predict(X_sc.transform(X_test))
+    # y_pred = np.reshape(y_pred,(-1,1))
+    # print(f"{type(y_pred)=}")
+    # print(f"{y_pred.shape=}")
+    # print(f"{y_test.to_numpy().shape=}")
+    # print(f"{type(y_test.to_numpy())}")
+    # plot_result(y_test=y_test.to_numpy(),
+    #             y_pred=y_sc.inverse_transform(y_pred), 
+    #             output_column=output_column,
+    #             modelname="RandomForest")
     
 
     # Random searchCV
@@ -360,6 +374,7 @@ def GradientBoost_model(X, y):
     y_train_tf = y_sc.transform(y_train)
 
     consolelog("Create Gradient Boosting Regressor")
+    logger.info("Create Gradient Boosting Regressor")
     
     gbr = GradientBoostingRegressor(n_estimators=800,
                                max_depth=50,
@@ -383,6 +398,9 @@ def GradientBoost_model(X, y):
     print(f"{X.columns=}")
     print(f"{r.importances_mean}")
     print(f"{r.importances_std}")
+    logger.info(f"{X.columns=}")
+    logger.info(f"{r.importances_mean=}")
+    logger.info(f"{r.importances_std=}")
     print("----- End Gradient Boosting Regressor --------")
 
 
@@ -398,6 +416,8 @@ def SVRModel(X,y):
     y_train_tf = y_sc.transform(y_train)
 
     consolelog("Create SVR Regressor")
+    logger.info("Create SVR Regressor")
+
 
     SVRreg = svm.SVR(kernel='rbf',epsilon=0.5,C=10)
     # print(f"{X_train.shape=} {y_train.shape=}")
@@ -428,6 +448,9 @@ def SVRModel(X,y):
     print(f"{X.columns=}")
     print(f"{r.importances_mean}")
     print(f"{r.importances_std}")
+    logger.info(f"{X.columns=}")
+    logger.info(f"{r.importances_mean=}")
+    logger.info(f"{r.importances_std=}")
     
     # Random searchCV
     # SVRreg = svm.SVR()
@@ -461,17 +484,18 @@ def ANNModel(X,y):
 
     # define the model
     model1 = Sequential()
-    model1.add(Input(shape=(19,)))
+    shape = len(X.columns)
+    model1.add(Input(shape=(shape,)))
 
     # Layer #
-    model1.add(Dense(32, kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dense(120, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
     # # Layer #
-    # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
-    # model1.add(Dropout(0.1))
+    model1.add(Dense(80,kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dropout(0.1))
     # # Layer #
-    # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
-    # model1.add(Dropout(0.1))
+    model1.add(Dense(40,kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dropout(0.1))
     # # Layer #
     # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
     # model1.add(Dropout(0.1))
@@ -482,8 +506,8 @@ def ANNModel(X,y):
     # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
     # model1.add(Dropout(0.1))
     # Layer #
-    model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
-    model1.add(Dropout(0.1))
+    # model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
+    # model1.add(Dropout(0.1))
 
     model1.add(Dense(1))
     model1.compile(loss='mae', 
@@ -536,7 +560,7 @@ def get_random_grid():
 
 def wrapAnn():
     model1 = Sequential()
-    model1.add(Input(shape=(19,)))
+    model1.add(Input(shape=(21,)))
     model1.add(Dense(32, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
     model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
@@ -551,6 +575,7 @@ def wrapAnn():
     return model1
 
 def permutationAnn(X,y):
+    logger.info("ANN model")
     X_train, X_test, y_train, y_test = train_test_split(
                             X, y, test_size=0.33, random_state=42)
 
@@ -576,6 +601,9 @@ def permutationAnn(X,y):
     print(f"{X.columns=}")
     print(f"{r.importances_mean}")
     print(f"{r.importances_std}")
+    logger.info(f"{X.columns=}")
+    logger.info(f"{r.importances_mean=}")
+    logger.info(f"{r.importances_std=}")
 
 
 def getsvrgrid():
@@ -632,6 +660,8 @@ def poly(X: pd.DataFrame, y: pd.DataFrame):
 
 def noname():
     # np.set_printoptions(suppress=True)
+    loginit()
+    logger.info(" Start Main Program ")
     pd.options.display.float_format = '{:.6f}'.format
     df = readdata()
     # print(df.head())
@@ -647,10 +677,10 @@ def noname():
     y = df[output_column]
     # get_random_grid()
 
-    # RandomForest_model(X,y)
+    RandomForest_model(X,y)
     # GradientBoost_model(X,y)
     # SVRModel(X,y)
-    ANNModel(X,y)
+    # ANNModel(X,y)
     # permutationAnn(X,y)
     # poly(X,y)
 
@@ -658,4 +688,5 @@ def noname():
 
 if __name__ == "__main__":
     consolelog("Running main Program")
+    
     noname()

@@ -59,17 +59,18 @@ input_col = [
     'Công nghệ nuôi', 
     'Giống tôm',  
     'Mực nước',
-    'Tuổi tôm',
-     'area', 
-    'Nhiệt độ', 'pH', 'DO', # thông số bắt buộc
-    # 'Ngày thả',
+    # 'Tuổi tôm',
+    #  'area', 
+    'Nhiệt độ', 'pH',
+    # 'DO', 
+    'Ngày thả',
     'Độ mặn', 
-    'TDS', 
-    'Độ đục',
+    # 'TDS', 
+    # 'Độ đục',
     'Độ trong',
     #phase 2 
-    'Độ cứng',
-    'Độ màu',
+    # 'Độ cứng',
+    # 'Độ màu',
     # 'Silica',
     ]
 
@@ -436,15 +437,15 @@ def GradientBoostedTreeModel(X,y):
             f.write(f"{random_state},{RMSE},{MAE},{MAPE},{R2Score}\n")   
 
 def ANNModel(X,y):
-
+    inputshape = len(X.columns)
     # define the model
     model1 = Sequential()
-    model1.add(Input(shape=(21,)))
-    model1.add(Dense(32, kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Input(shape=(inputshape,)))
+    model1.add(Dense(64, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
-    model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dense(32,kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
-    model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
+    model1.add(Dense(16, kernel_initializer='he_uniform', activation='relu'))
     model1.add(Dropout(0.1))
     model1.add(Dense(1))
     model1.compile(loss='mae', 
@@ -456,7 +457,7 @@ def ANNModel(X,y):
     with open("./output/ANN_error.csv","w+") as f:
         f.write("Set, MRSE, MAE, MAPE(%), R2Score\n")
 
-        for random_state in range(1,201):
+        for random_state in range(1,2):
             print(f"----- Loop {random_state} ------")    
 
             X_train, X_test, y_train, y_test = train_test_split(
@@ -646,9 +647,9 @@ def noname():
     # GradientBoostedTreeModel(X,y)
     # print(input_col)
     # SVRModel(X,y)
-    # ANNModel(X,y)
+    ANNModel(X,y)
     # LinearModel(X,y)
-    polyModel(X,y)
+    # polyModel(X,y)
 
 
 

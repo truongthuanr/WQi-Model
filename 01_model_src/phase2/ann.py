@@ -343,17 +343,17 @@ def ANN_model(X: pd.DataFrame, y):
         model1.add(Input(shape=(inputshape,)))
 
         # Layer #
-        model1.add(Dense((64-inputshape), kernel_initializer='he_uniform', activation='relu'))
+        # model1.add(Dense((64-inputshape), kernel_initializer='he_uniform', activation='relu'))
+        # model1.add(Dropout(0.1))
+        # # Layer #
+        model1.add(Dense(64,kernel_initializer='he_uniform', activation='relu'))
         model1.add(Dropout(0.1))
         # # Layer #
-        # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
-        # model1.add(Dropout(0.1))
+        model1.add(Dense(32,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
         # # Layer #
-        # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
-        # model1.add(Dropout(0.1))
-        # # Layer #
-        # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
-        # model1.add(Dropout(0.1))
+        model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
         # # Layer #
         # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
         # model1.add(Dropout(0.1))
