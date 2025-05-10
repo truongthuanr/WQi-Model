@@ -11,6 +11,7 @@ from datetime import datetime
 
 import pandas as pd
 import numpy as np
+import shap
 from scipy import stats
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -321,17 +322,31 @@ def RandomForest_model(X, y):
     print(f"{std=}")
     logger.info(f"{std=}")
 
-    logger.info("Permutation Importance Random Forest")
-    r = permutation_importance(estimator=rf, 
-                               X=X_train_tf, 
-                               y=np.reshape(y_train_tf,(-1)),
-                                n_repeats=200,
-                                random_state=42)
+    # logger.info("Permutation Importance Random Forest")
+    # r = permutation_importance(estimator=rf, 
+    #                            X=X_train_tf, 
+    #                            y=np.reshape(y_train_tf,(-1)),
+    #                             n_repeats=200,
+    #                             random_state=42)
 
-    logger.info(f"{X.columns=}")
-    logger.info(f"{r.importances_mean=}")
-    logger.info(f"{r.importances_std=}")
+    # logger.info(f"{X.columns=}")
+    # logger.info(f"{r.importances_mean=}")
+    # logger.info(f"{r.importances_std=}")
     print("----- End Random Forest Regressor --------")
+
+    
+    # Lấy 100 mẫu đại diện từ tập huấn luyện
+    X_sample = X_train_tf[:100]
+
+    # Tạo SHAP Explainer cho mô hình cây
+    explainer = shap.TreeExplainer(rf)
+    shap_values = explainer.shap_values(X_sample)
+
+    # Plot tổng quan importance (global)
+    shap.summary_plot(shap_values, X_sample, feature_names=X.columns)
+    # Lưu thành file PNG
+    plt.savefig("output/shap_summary_plot.png", dpi=300, bbox_inches='tight')
+    plt.close()
 
 
     # rf.score(X_sc.transform(X_test),y_sc.transform(y_test))
