@@ -40,7 +40,7 @@ columns = ['Date',
            'Loại ao',
              'Công nghệ nuôi', 
              'area', 
-        #    'Giống tôm',
+           'Giống tôm',
             'Tuổi tôm', 
             'Mực nước', 'Amoni', 
             'Nitrat', 'Nitrit', 'Silica',
@@ -120,7 +120,20 @@ input_col4 = [
     # 'Độ màu',
     ]
 
-input_col_list = [input_col1, input_col2,input_col3,input_col4 ]
+input_col_list = [
+    ["Công nghệ nuôi", "Nhiệt độ", "Độ màu", "area", "Độ mặn", "Loại ao", "Độ cứng", "TDS", "pH", "Tuổi tôm"],
+    ["Nhiệt độ", "Độ màu", "area", "Độ mặn", "Loại ao", "Độ cứng", "TDS", "pH", "Tuổi tôm"],
+    ["Độ màu", "area", "Độ mặn", "Loại ao", "Độ cứng", "TDS", "pH", "Tuổi tôm"],
+    ["area", "Độ mặn", "Loại ao", "Độ cứng", "TDS", "pH", "Tuổi tôm"],
+    ["Độ mặn", "Loại ao", "Độ cứng", "TDS", "pH", "Tuổi tôm"],
+    ["Loại ao", "Độ cứng", "TDS", "pH", "Tuổi tôm"],
+    ["Công nghệ nuôi", "Nhiệt độ", "area", "Độ mặn", "Loại ao", "pH", "Tuổi tôm"],
+    ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
+]
+
+
+
+# input_col_list = [input_col1, input_col2,input_col3,input_col4 ]
 
 output_folder = "output"
 
@@ -130,7 +143,7 @@ categorical_col = ['Date',
                    'Season', 
                    'Loại ao', 
                    'Công nghệ nuôi', 
-                #    'Giống tôm',
+                   'Giống tôm',
                    'units']
 
 categorical_usecol_all = [
@@ -265,12 +278,14 @@ def datacleaning(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
+    print("----- Preprocessing -----")
     df_num = df.drop(categorical_col,axis=1)
 
     df1 = df[(np.abs(stats.zscore(df_num))<zscore_lim).all(axis=1)].copy()
-    fig= plt.figure(figsize=(10,5))
-    ax = sns.boxplot(df1)
-    ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
+    print(f"{df1.columns=}")
+    # fig= plt.figure(figsize=(10,5))
+    # ax = sns.boxplot(df1)
+    # ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
     # plt.show()
     # plt.savefig(os.path.join(output_folder,"boxplot1.png"))
 
@@ -292,11 +307,11 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
 
     df1.to_csv(os.path.join(output_folder,"databeforetrain1.csv"))
 
-    print("Plot data!")
-    plt.figure(figsize=(10,5))
-    sns.boxenplot(df1)
-    ax = plt.gca()
-    ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
+    # print("Plot data!")
+    # plt.figure(figsize=(10,5))
+    # sns.boxenplot(df1)
+    # ax = plt.gca()
+    # ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
     # plt.show()
     # plt.savefig(os.path.join(output_folder,"boxplot2.png"))
 
@@ -349,9 +364,9 @@ def RandomForest_model(X: pd.DataFrame, y):
         rf.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
 
 
-        imp_feats = rf.feature_importances_
-        std = np.std([tree.feature_importances_ for tree in rf.estimators_], axis=0)
-        print(f"------------------")
+        # imp_feats = rf.feature_importances_
+        # std = np.std([tree.feature_importances_ for tree in rf.estimators_], axis=0)
+        # print(f"------------------")
 
         # print(f"Feature Importance: {imp_feats}")
         # print(f"{std=}")
@@ -383,10 +398,11 @@ def RandomForest_model(X: pd.DataFrame, y):
         i=0;
         y_test=y_test.to_numpy()
         y_pred=y_sc.inverse_transform(y_pred)
-        error_text = f"RMSE:\t {root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}" + "\n" +\
-                f"MAE:\t {mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"+ "\n" +\
-                f"MAPE(%):\t {mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"+ "\n" +\
-                f"R2 Score:\t {r2_score(y_test[:,i],y_pred[:,i]):.3f}\n"
+        logfile.write(f"RMSE\tMAE\tMAPE\tR2\n")
+        error_text = f"{root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}" + "\t" +\
+                f"{mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"+ "\t" +\
+                f"{mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"+ "\t" +\
+                f"{r2_score(y_test[:,i],y_pred[:,i]):.3f}\t"
         
         logfile.write(error_text)
         logfile.write("\n------------------\n\n")
