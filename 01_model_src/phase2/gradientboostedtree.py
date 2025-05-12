@@ -40,7 +40,7 @@ columns = ['Date',
            'Loại ao',
              'Công nghệ nuôi', 
              'area', 
-        #    'Giống tôm',
+           'Giống tôm',
             'Tuổi tôm', 
             'Mực nước', 'Amoni', 
             'Nitrat', 'Nitrit', 'Silica',
@@ -120,7 +120,19 @@ input_col4 = [
     # 'Độ màu',
     ]
 
-input_col_list = [input_col1, input_col2,input_col3,input_col4 ]
+input_col_list = [
+    ["Độ đục", "Độ trong", "Độ cứng", "Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    ["Độ trong", "Độ cứng", "Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    ["Độ cứng", "Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    ["Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    ["Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    ["TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    ["Độ trong", "Độ mặn", "Nhiệt độ", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
+]
+
+
+# input_col_list = [input_col1, input_col2,input_col3,input_col4 ]
 
 output_folder = "output"
 
@@ -130,7 +142,7 @@ categorical_col = ['Date',
                    'Season', 
                    'Loại ao', 
                    'Công nghệ nuôi', 
-                #    'Giống tôm',
+                   'Giống tôm',
                    'units']
 
 categorical_usecol_all = [
@@ -314,81 +326,71 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     return df1
 
 
-def gbt_model(X: pd.DataFrame, y):
-    _currenttime = datetime.strftime(currenttime,"%y%m%d-%H%M%S")
-    with open(f"./output/gradientboostedtree_{_currenttime}.log","a+",encoding="utf-8") as logfile:
-        _currenttime = datetime.strftime(currenttime,"%y-%m-%d %H:%M:%S")
-        logfile.write("Gradient Boosted Tree Result\n")
-        logfile.write(f"Time Record:\t {_currenttime}\n")
+def gbt_model_repeated(X: pd.DataFrame, y: pd.DataFrame, n_repeats: int = 10, test_size: float = 0.33):
+    _currenttime = datetime.strftime(currenttime, "%y%m%d-%H%M%S")
+    log_path = f"./output/gbt_repeated_{_currenttime}.log"
+
+    metrics_result = {
+        "RMSE": [], "MAE": [], "MAPE": [], "R2": []
+    }
+
+    with open(log_path, "a+", encoding="utf-8") as logfile:
+        logfile.write("Gradient Boosted Tree - Repeated Random Splits\n")
+        logfile.write(f"Time Record:\t {datetime.strftime(currenttime, '%y-%m-%d %H:%M:%S')}\n")
         logfile.write(f"Input columns:\t {input_col}\n")
-        logfile.write(f"Data train columns:\t {X.columns}\n")
+        logfile.write(f"Repeats:\t {n_repeats}\n")
+        logfile.write(f"Test size:\t {test_size}\n\n")
+        logfile.write("RMSE\tMAE\tMAPE\tR2\n")
         
-        X_train, X_test, y_train, y_test = train_test_split(
-                                X, y, test_size=0.33, random_state=42)
-        X_sc = StandardScaler()
-        X_sc.fit(X_train)
-        X_train_tf = X_sc.transform(X_train)
+        for repeat in range(n_repeats):
+            print(f"-------- SET {repeat} ----------")
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=repeat
+            )
 
-        y_sc = StandardScaler()
-        y_sc.fit(y_train)
-        y_train_tf = y_sc.transform(y_train)
-
-
-        gbr = GradientBoostingRegressor(n_estimators=100,
-                            max_depth=10,
-                            min_samples_split=2,
-                            min_samples_leaf=2,
-                            max_features='sqrt', 
-                            loss='squared_error',
-                            random_state=0,
-                            learning_rate=0.05,
-                            verbose=0,
-                            )
+            X_sc = StandardScaler()
+            y_sc = StandardScaler()
+            X_train_tf = X_sc.fit_transform(X_train)
+            y_train_tf = y_sc.fit_transform(y_train)
 
 
-        gbr.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
 
-        y_pred = gbr.predict(X_sc.transform(X_test))
-        y_pred = np.reshape(y_pred,(-1,1))
+            gbr = GradientBoostingRegressor(n_estimators=100,
+                                max_depth=10,
+                                min_samples_split=2,
+                                min_samples_leaf=2,
+                                max_features='sqrt', 
+                                loss='squared_error',
+                                random_state=0,
+                                learning_rate=0.05,
+                                verbose=0,
+                                )
+
+
+            gbr.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+
+            y_pred = gbr.predict(X_sc.transform(X_test)).reshape(-1, 1)
+            y_test_np = y_test.to_numpy()
+            y_pred_inv = y_sc.inverse_transform(y_pred)
         
-        i=0;
-        y_test=y_test.to_numpy()
-        y_pred=y_sc.inverse_transform(y_pred)
-        error_text = f"RMSE:\t {root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}" + "\n" +\
-                f"MAE:\t {mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"+ "\n" +\
-                f"MAPE(%):\t {mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"+ "\n" +\
-                f"R2 Score:\t {r2_score(y_test[:,i],y_pred[:,i]):.3f}\n"
+            rmse = root_mean_squared_error(y_test_np, y_pred_inv)
+            mae = mean_absolute_error(y_test_np, y_pred_inv)
+            mape = mean_absolute_percentage_error(y_test_np, y_pred_inv) * 100
+            r2 = r2_score(y_test_np, y_pred_inv)
+
+            metrics_result["RMSE"].append(rmse)
+            metrics_result["MAE"].append(mae)
+            metrics_result["MAPE"].append(mape)
+            metrics_result["R2"].append(r2)
+
+            logfile.write(f"{rmse:.3f}\t{mae:.3f}\t{mape:.3f}\t{r2:.3f}\n")
+
+        logfile.write("\n----- Summary (Mean ± Std) -----\n")
+        for k in metrics_result:
+            mean_val = np.mean(metrics_result[k])
+            std_val = np.std(metrics_result[k])
+            logfile.write(f"{k}: {mean_val:.3f} ± {std_val:.3f}\n")
         
-        logfile.write(error_text)
-        logfile.write("\n------------------\n\n")
-        
-    
-
-# def get_random_grid():
-#     # Number of trees in random forest
-#     n_estimators = [int(x) for x in np.linspace(start = 200, stop = 2000, num = 10)]
-#     # Number of features to consider at every split
-#     max_features = ['auto', 'sqrt']
-#     # Maximum number of levels in tree
-#     max_depth = [int(x) for x in np.linspace(10, 110, num = 11)]
-#     max_depth.append(None)
-#     # Minimum number of samples required to split a node
-#     min_samples_split = [2, 5, 10]
-#     # Minimum number of samples required at each leaf node
-#     min_samples_leaf = [1, 2, 4]
-#     # Method of selecting samples for training each tree
-#     bootstrap = [True, False]
-#     # Create the random grid
-#     random_grid = {'n_estimators': n_estimators,
-#                 'max_features': max_features,
-#                 'max_depth': max_depth,
-#                 'min_samples_split': min_samples_split,
-#                 'min_samples_leaf': min_samples_leaf,
-#                 'bootstrap': bootstrap}
-#     # print(random_grid)
-#     return random_grid
-
-
 def noname():
     # np.set_printoptions(suppress=True)
     pd.options.display.float_format = '{:.6f}'.format
@@ -414,7 +416,7 @@ def noname():
         y = df[output_column]
         # get_random_grid()
 
-        gbt_model(X,y)
+        gbt_model_repeated(X,y,n_repeats=200)
 
 
 

@@ -30,7 +30,6 @@ from sklearn import svm
 from scikeras.wrappers import KerasRegressor
 import matplotlib
 
-
 columns = ['Date', 
            'Season', 
            'Vụ nuôi', 'module_name', 'ao', 
@@ -40,108 +39,35 @@ columns = ['Date',
            'Loại ao',
              'Công nghệ nuôi', 
              'area', 
-        #    'Giống tôm',
+           'Giống tôm',
             'Tuổi tôm', 
             'Mực nước', 'Amoni', 
             'Nitrat', 'Nitrit', 'Silica',
             #  'Canxi', 'Kali', 'Magie'
              ]
-
-
-input_col1 = [
-    'Season', 
-    'Loại ao', 
-    'Công nghệ nuôi',  
-    'Mực nước',
-    'Tuổi tôm',
-    #  'area', 
-    'Nhiệt độ', 
-    'pH', 
-    'DO',
-    # 'Độ mặn', 
-    'TDS', 
-    # 'Độ đục',
-    # 'Độ trong',
-    'Độ cứng',
-    # 'Độ màu',
-    ]
-
-input_col2 = [
-    'Season', 
-    'Loại ao', 
-    'Công nghệ nuôi',  
-    'Mực nước',
-    'Tuổi tôm',
-    #  'area', 
-    'Nhiệt độ', 
-    'pH', 
-    'DO',
-    # 'Độ mặn', 
-    # 'TDS', 
-    # 'Độ đục',
-    # 'Độ trong',
-    # 'Độ cứng',
-    # 'Độ màu',
-    ]
-
-input_col3 = [
-    'Season', 
-    'Loại ao', 
-    'Công nghệ nuôi',  
-    # 'Mực nước',
-    'Tuổi tôm',
-    #  'area', 
-    'Nhiệt độ', 
-    'pH', 
-    'DO',
-    # 'Độ mặn', 
-    # 'TDS', 
-    # 'Độ đục',
-    # 'Độ trong',
-    # 'Độ cứng',
-    # 'Độ màu',
-    ]
-
-input_col4 = [
-    # 'Season', 
-    # 'Loại ao', 
-    # 'Công nghệ nuôi',  
-    # # 'Mực nước',
-    # 'Tuổi tôm',
-    # #  'area', 
-    # 'Nhiệt độ', 
-    # 'pH', 
-    # # 'DO',
-    # 'Độ mặn', 
-    # 'TDS', 
-    # # 'Độ đục',
-    # 'Độ trong',
-    # 'Độ cứng',
-    # 'Độ màu',
-    ]
-
-input_col_list = [input_col1, input_col2,input_col3,
-                #   input_col4 
-                  ]
-
+input_col_list = [
+    ["DO", "Nhiệt độ", "Giống tôm", "area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    ["Nhiệt độ", "Giống tôm", "area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    ["Giống tôm", "area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    ["area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    ["TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    ["Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    ["DO", "Nhiệt độ", "Giống tôm", "area", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
+]
 output_folder = "output"
-
-
-
 categorical_col = ['Date',
                    'Season', 
                    'Loại ao', 
                    'Công nghệ nuôi', 
-                #    'Giống tôm',
+                   'Giống tôm',
                    'units']
-
 categorical_usecol_all = [
     'Season', 
     'Loại ao', 
     'Công nghệ nuôi', 
     'Giống tôm'
     ]
-
 # output_column = ['TAN', 'Nitrat', 'Nitrit', 'Silica', 'Canxi', 'Kali', 'Magie', 'Độ kiềm', 'Độ cứng']
 output_column = ['Độ kiềm']
 zscore_lim =  3
@@ -276,19 +202,6 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     # plt.show()
     # plt.savefig(os.path.join(output_folder,"boxplot1.png"))
 
-    # # lastday columns
-    # # Tạo thêm cột lastday-column chứa dữ liệu của ngày hôm trước
-    # # trong mỗi hàng, khởi tạo các cột với giá trị NaN
-    # # then, drop the NaN row
-    # ld_column = [f"ld_{col}" for col in output_column]
-    # df[ld_column] = np.NaN
-
-    # # Copy data của ngày hôm trước cho mỗi row
-    # unit_l = list(df['units'].unique())
-    # for unit in unit_l:
-    #     df.loc[df['units']==unit,ld_column] = df.loc[df['units']==unit,output_column].shift(1).to_numpy(copy=True)
-    # df.dropna(axis=0,inplace=True)
-
     df1 = df1[input_col + output_column].copy()
     df1.reset_index(drop=True,inplace=True)
 
@@ -316,111 +229,89 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     return df1
 
 
-def ANN_model(X: pd.DataFrame, y):
-    _currenttime = datetime.strftime(currenttime,"%y%m%d-%H%M%S")
-    with open(f"./output/ann_{_currenttime}.log","a+",encoding="utf-8") as logfile:
-        _currenttime = datetime.strftime(currenttime,"%y-%m-%d %H:%M:%S")
-        logfile.write("ANN Result\n")
-        logfile.write(f"Time Record:\t {_currenttime}\n")
+def ANN_model_with_repeated_random_subsampling(X: pd.DataFrame, y: pd.DataFrame, n_repeats: int = 10, test_size: float = 0.33):
+    _currenttime = datetime.strftime(currenttime, "%y%m%d-%H%M%S")
+    log_path = f"./output/ann_repeated_{_currenttime}.log"
+
+    metrics_result = {
+        "RMSE": [], "MAE": [], "MAPE": [], "R2": []
+    }
+
+    with open(log_path, "a+", encoding="utf-8") as logfile:
+        logfile.write("ANN - Repeated Random Splits\n")
+        logfile.write(f"Time Record:\t {datetime.strftime(currenttime, '%y-%m-%d %H:%M:%S')}\n")
         logfile.write(f"Input columns:\t {input_col}\n")
-        logfile.write(f"Data train columns:\t {X.columns}\n")
+        logfile.write(f"Repeats:\t {n_repeats}\n")
+        logfile.write(f"Test size:\t {test_size}\n\n")
+        logfile.write("RMSE\tMAE\tMAPE\tR2\n")
+
+        for repeat in range(n_repeats):
+            print(f"----- SET {repeat} -----")
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=repeat
+            )
+
+            X_sc = StandardScaler()
+            y_sc = StandardScaler()
+            X_train_tf = X_sc.fit_transform(X_train)
+            y_train_tf = y_sc.fit_transform(y_train)
+
+            #     # define the model
+            model1 = Sequential()
+            inputshape = len(X.columns)
+            model1.add(Input(shape=(inputshape,)))
+            # Layer #
+            model1.add(Dense(72,kernel_initializer='he_uniform', activation='relu'))
+            model1.add(Dropout(0.1))
+            # # Layer #
+            model1.add(Dense(60,kernel_initializer='he_uniform', activation='relu'))
+            model1.add(Dropout(0.1))
+            # # Layer #
+            model1.add(Dense(32,kernel_initializer='he_uniform', activation='relu'))
+            model1.add(Dropout(0.1))
+
+            # Layer #
+            model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
+            model1.add(Dropout(0.1))
+
+            model1.add(Dense(1))
+            model1.compile(loss='mae', 
+                        optimizer='nadam',
+                        metrics=['accuracy','r2_score']
+                        )
+            # model1.summary()
+
+
+            # Train model
+            history = model1.fit(X_train_tf, y_train_tf,
+                                epochs=300,
+                                batch_size=32,
+                                verbose=False,
+                                validation_split=0.2)
+            
+            # Evaluate model on the test set
+            y_pred = model1.predict(X_sc.transform(X_test))
+            y_pred = y_sc.inverse_transform(y_pred)
+            
+            # Calculate errors
+            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+            mae = mean_absolute_error(y_test, y_pred)
+            mape = mean_absolute_percentage_error(y_test, y_pred) * 100
+            r2 = r2_score(y_test, y_pred)
+
+            metrics_result["RMSE"].append(rmse)
+            metrics_result["MAE"].append(mae)
+            metrics_result["MAPE"].append(mape)
+            metrics_result["R2"].append(r2)
+
+            logfile.write(f"{rmse:.3f}\t{mae:.3f}\t{mape:.3f}\t{r2:.3f}\n")
+
+        logfile.write("\n----- Summary (Mean ± Std) -----\n")
+        for k in metrics_result:
+            mean_val = np.mean(metrics_result[k])
+            std_val = np.std(metrics_result[k])
+            logfile.write(f"{k}: {mean_val:.3f} ± {std_val:.3f}\n")
         
-        X_train, X_test, y_train, y_test = train_test_split(
-                            X, y, test_size=0.33, random_state=42)
-
-        X_sc = StandardScaler()
-        X_sc.fit(X_train)
-        X_train_tf = X_sc.transform(X_train)
-        print(f"{X_train_tf.shape}")
-        y_sc = StandardScaler()
-        y_sc.fit(y_train)
-        y_train_tf = y_sc.transform(y_train)
-        print(f"{y_train_tf.shape}")
-
-        # define the model
-        model1 = Sequential()
-        inputshape = len(X.columns)
-        model1.add(Input(shape=(inputshape,)))
-
-        # Layer #
-        # model1.add(Dense((64-inputshape), kernel_initializer='he_uniform', activation='relu'))
-        # model1.add(Dropout(0.1))
-        # # Layer #
-        model1.add(Dense(64,kernel_initializer='he_uniform', activation='relu'))
-        model1.add(Dropout(0.1))
-        # # Layer #
-        model1.add(Dense(32,kernel_initializer='he_uniform', activation='relu'))
-        model1.add(Dropout(0.1))
-        # # Layer #
-        model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
-        model1.add(Dropout(0.1))
-        # # Layer #
-        # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
-        # model1.add(Dropout(0.1))
-        # # Layer #
-        # model1.add(Dense(16,kernel_initializer='he_uniform', activation='relu'))
-        # model1.add(Dropout(0.1))
-        # Layer #
-        model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
-        model1.add(Dropout(0.1))
-
-        model1.add(Dense(1))
-        model1.compile(loss='mae', 
-                    optimizer='nadam',
-                    metrics=['accuracy','r2_score']
-                    )
-        model1.summary()
-
-        history = model1.fit(X_train_tf,y_train_tf,
-                    epochs=300,
-                    batch_size=32,
-                    verbose=False,
-                    validation_split=0.2)
-        # print(f"{model1.get_weights()[0]=}")
-        # print(f"{model1.get_weights()[0].shape=}")
-
-
-        # plot_history(history.history)
-
-        y_pred = model1.predict(X_sc.transform(X_test))
-        
-        i=0;
-        y_test=y_test.to_numpy()
-        y_pred=y_sc.inverse_transform(y_pred)
-        error_text = f"RMSE:\t {root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}" + "\n" +\
-                f"MAE:\t {mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"+ "\n" +\
-                f"MAPE(%):\t {mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"+ "\n" +\
-                f"R2 Score:\t {r2_score(y_test[:,i],y_pred[:,i]):.3f}\n"
-        
-        logfile.write(error_text)
-        logfile.write("\n------------------\n\n")
-        
-    
-
-# def get_random_grid():
-#     # Number of trees in random forest
-#     n_estimators = [int(x) for x in np.linspace(start = 200, stop = 2000, num = 10)]
-#     # Number of features to consider at every split
-#     max_features = ['auto', 'sqrt']
-#     # Maximum number of levels in tree
-#     max_depth = [int(x) for x in np.linspace(10, 110, num = 11)]
-#     max_depth.append(None)
-#     # Minimum number of samples required to split a node
-#     min_samples_split = [2, 5, 10]
-#     # Minimum number of samples required at each leaf node
-#     min_samples_leaf = [1, 2, 4]
-#     # Method of selecting samples for training each tree
-#     bootstrap = [True, False]
-#     # Create the random grid
-#     random_grid = {'n_estimators': n_estimators,
-#                 'max_features': max_features,
-#                 'max_depth': max_depth,
-#                 'min_samples_split': min_samples_split,
-#                 'min_samples_leaf': min_samples_leaf,
-#                 'bootstrap': bootstrap}
-#     # print(random_grid)
-#     return random_grid
-
 
 def noname():
     # np.set_printoptions(suppress=True)
@@ -447,8 +338,7 @@ def noname():
         y = df[output_column]
         # get_random_grid()
 
-        ANN_model(X,y)
-
+        ANN_model_with_repeated_random_subsampling(X, y, n_repeats=200)
 
 
 

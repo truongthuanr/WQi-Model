@@ -30,6 +30,8 @@ from sklearn import svm
 from scikeras.wrappers import KerasRegressor
 import matplotlib
 
+from sklearn.utils import shuffle
+
 
 columns = ['Date', 
            'Season', 
@@ -48,78 +50,6 @@ columns = ['Date',
              ]
 
 
-input_col1 = [
-    # 'Season', 
-    'Loại ao', 
-    'Công nghệ nuôi',  
-    # 'Mực nước',
-    'Tuổi tôm',
-    #  'area', 
-    'Nhiệt độ', 
-    'pH', 
-    # 'DO',
-    'Độ mặn', 
-    'TDS', 
-    # 'Độ đục',
-    'Độ trong',
-    'Độ cứng',
-    'Độ màu',
-    ]
-
-input_col2 = [
-    # 'Season', 
-    'Loại ao', 
-    'Công nghệ nuôi',  
-    # 'Mực nước',
-    'Tuổi tôm',
-    #  'area', 
-    'Nhiệt độ', 
-    'pH', 
-    # 'DO',
-    'Độ mặn', 
-    # 'TDS', 
-    # 'Độ đục',
-    'Độ trong',
-    # 'Độ cứng',
-    # 'Độ màu',
-    ]
-
-input_col3 = [
-    # 'Season', 
-    'Loại ao', 
-    'Công nghệ nuôi',  
-    # 'Mực nước',
-    'Tuổi tôm',
-    #  'area', 
-    'Nhiệt độ', 
-    'pH', 
-    # 'DO',
-    'Độ mặn', 
-    # 'TDS', 
-    # 'Độ đục',
-    # 'Độ trong',
-    # 'Độ cứng',
-    # 'Độ màu',
-    ]
-
-input_col4 = [
-    # 'Season', 
-    # 'Loại ao', 
-    'Công nghệ nuôi',  
-    # 'Mực nước',
-    'Tuổi tôm',
-    #  'area', 
-    'Nhiệt độ', 
-    'pH', 
-    # 'DO',
-    'Độ mặn', 
-    # 'TDS', 
-    # 'Độ đục',
-    # 'Độ trong',
-    # 'Độ cứng',
-    # 'Độ màu',
-    ]
-
 input_col_list = [
     ["Công nghệ nuôi", "Nhiệt độ", "Độ màu", "area", "Độ mặn", "Loại ao", "Độ cứng", "TDS", "pH", "Tuổi tôm"],
     ["Nhiệt độ", "Độ màu", "area", "Độ mặn", "Loại ao", "Độ cứng", "TDS", "pH", "Tuổi tôm"],
@@ -131,13 +61,7 @@ input_col_list = [
     ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
 ]
 
-
-
-# input_col_list = [input_col1, input_col2,input_col3,input_col4 ]
-
 output_folder = "output"
-
-
 
 categorical_col = ['Date',
                    'Season', 
@@ -153,7 +77,7 @@ categorical_usecol_all = [
     'Giống tôm'
     ]
 
-# output_column = ['TAN', 'Nitrat', 'Nitrit', 'Silica', 'Canxi', 'Kali', 'Magie', 'Độ kiềm', 'Độ cứng']
+
 output_column = ['Độ kiềm']
 zscore_lim =  3
 
@@ -289,19 +213,6 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     # plt.show()
     # plt.savefig(os.path.join(output_folder,"boxplot1.png"))
 
-    # # lastday columns
-    # # Tạo thêm cột lastday-column chứa dữ liệu của ngày hôm trước
-    # # trong mỗi hàng, khởi tạo các cột với giá trị NaN
-    # # then, drop the NaN row
-    # ld_column = [f"ld_{col}" for col in output_column]
-    # df[ld_column] = np.NaN
-
-    # # Copy data của ngày hôm trước cho mỗi row
-    # unit_l = list(df['units'].unique())
-    # for unit in unit_l:
-    #     df.loc[df['units']==unit,ld_column] = df.loc[df['units']==unit,output_column].shift(1).to_numpy(copy=True)
-    # df.dropna(axis=0,inplace=True)
-
     df1 = df1[input_col + output_column].copy()
     df1.reset_index(drop=True,inplace=True)
 
@@ -314,7 +225,6 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     # ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
     # plt.show()
     # plt.savefig(os.path.join(output_folder,"boxplot2.png"))
-
 
     print("One hot encorder")
     oh_enc = OneHotEncoder(sparse_output=False)
@@ -329,109 +239,66 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     return df1
 
 
-def RandomForest_model(X: pd.DataFrame, y):
-    _currenttime = datetime.strftime(currenttime,"%y%m%d-%H%M%S")
-    with open(f"./output/randomforest_{_currenttime}.log","a+",encoding="utf-8") as logfile:
-        _currenttime = datetime.strftime(currenttime,"%y-%m-%d %H:%M:%S")
-        logfile.write("Random Forest Result\n")
-        logfile.write(f"Time Record:\t {_currenttime}\n")
+def RandomForest_repeated(X: pd.DataFrame, y: pd.DataFrame, n_repeats: int = 10, test_size: float = 0.33):
+    _currenttime = datetime.strftime(currenttime, "%y%m%d-%H%M%S")
+    log_path = f"./output/randomforest_repeated_{_currenttime}.log"
+
+    metrics_result = {
+        "RMSE": [], "MAE": [], "MAPE": [], "R2": []
+    }
+
+    with open(log_path, "a+", encoding="utf-8") as logfile:
+        logfile.write("Random Forest - Repeated Random Splits\n")
+        logfile.write(f"Time Record:\t {datetime.strftime(currenttime, '%y-%m-%d %H:%M:%S')}\n")
         logfile.write(f"Input columns:\t {input_col}\n")
-        logfile.write(f"Data train columns:\t {X.columns}\n")
-        X_train, X_test, y_train, y_test = train_test_split(
-                            X, y, test_size=0.33, random_state=1)
-        X_sc = StandardScaler()
-        X_sc.fit(X_train)
-        X_train_tf = X_sc.transform(X_train)
+        logfile.write(f"Repeats:\t {n_repeats}\n")
+        logfile.write(f"Test size:\t {test_size}\n\n")
+        logfile.write("RMSE\tMAE\tMAPE\tR2\n")
 
-        y_sc = StandardScaler()
-        y_sc.fit(y_train)
-        y_train_tf = y_sc.transform(y_train)
+        for repeat in range(n_repeats):
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=repeat
+            )
 
-        print("Create RandomForeest")
-        
-        rf = RandomForestRegressor(n_estimators=800,
-                                max_depth=50,
-                                min_samples_split=2,
-                                min_samples_leaf=2,
-                                max_features='sqrt', 
-                                random_state=0,
-                                bootstrap=False,
-                                verbose=1,)
-        
-        
+            X_sc = StandardScaler()
+            y_sc = StandardScaler()
+            X_train_tf = X_sc.fit_transform(X_train)
+            y_train_tf = y_sc.fit_transform(y_train)
 
-        print("Training...")
-        rf.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+            rf = RandomForestRegressor(
+                n_estimators=800,
+                max_depth=50,
+                min_samples_split=2,
+                min_samples_leaf=2,
+                max_features='sqrt',
+                random_state=repeat,
+                bootstrap=False,
+                verbose=0
+            )
 
+            rf.fit(X_train_tf, np.reshape(y_train_tf, (-1)))
+            y_pred = rf.predict(X_sc.transform(X_test)).reshape(-1, 1)
+            y_test_np = y_test.to_numpy()
+            y_pred_inv = y_sc.inverse_transform(y_pred)
 
-        # imp_feats = rf.feature_importances_
-        # std = np.std([tree.feature_importances_ for tree in rf.estimators_], axis=0)
-        # print(f"------------------")
+            rmse = root_mean_squared_error(y_test_np, y_pred_inv)
+            mae = mean_absolute_error(y_test_np, y_pred_inv)
+            mape = mean_absolute_percentage_error(y_test_np, y_pred_inv) * 100
+            r2 = r2_score(y_test_np, y_pred_inv)
 
-        # print(f"Feature Importance: {imp_feats}")
-        # print(f"{std=}")
+            metrics_result["RMSE"].append(rmse)
+            metrics_result["MAE"].append(mae)
+            metrics_result["MAPE"].append(mape)
+            metrics_result["R2"].append(r2)
 
-        rf.score(X_sc.transform(X_test),y_sc.transform(y_test))
-        y_pred = rf.predict(X_sc.transform(X_test))
-        y_pred = np.reshape(y_pred,(-1,1))
+            logfile.write(f"{rmse:.3f}\t{mae:.3f}\t{mape:.3f}\t{r2:.3f}\n")
 
-        # for i in range(y_pred.shape[1]):
-        #     plt.subplot(3,3,i+1)
-        #     plt.scatter(y_sc.transform(y_test)[:,i],y_pred[:,i])
+        logfile.write("\n----- Summary (Mean ± Std) -----\n")
+        for k in metrics_result:
+            mean_val = np.mean(metrics_result[k])
+            std_val = np.std(metrics_result[k])
+            logfile.write(f"{k}: {mean_val:.3f} ± {std_val:.3f}\n")
 
-        # print(f"{y_sc.inverse_transform(np.reshape(y_pred,(1,-1))).shape=}")
-        # print(f"{type(y_sc.inverse_transform(np.reshape(y_pred,(1,-1))))=}")
-        print(f"{type(y_pred)=}")
-        print(f"{y_pred.shape=}")
-
-        
-        print(f"{y_test.to_numpy().shape=}")
-        print(f"{type(y_test.to_numpy())}")
-
-
-
-        # plot_result(y_test=y_test.to_numpy(),
-        #             y_pred=y_sc.inverse_transform(y_pred), 
-        #             output_column=output_column,
-        #             modelname="RandomForest")
-        
-        i=0;
-        y_test=y_test.to_numpy()
-        y_pred=y_sc.inverse_transform(y_pred)
-        logfile.write(f"RMSE\tMAE\tMAPE\tR2\n")
-        error_text = f"{root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}" + "\t" +\
-                f"{mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"+ "\t" +\
-                f"{mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"+ "\t" +\
-                f"{r2_score(y_test[:,i],y_pred[:,i]):.3f}\t"
-        
-        logfile.write(error_text)
-        logfile.write("\n------------------\n\n")
-        
-    
-
-# def get_random_grid():
-#     # Number of trees in random forest
-#     n_estimators = [int(x) for x in np.linspace(start = 200, stop = 2000, num = 10)]
-#     # Number of features to consider at every split
-#     max_features = ['auto', 'sqrt']
-#     # Maximum number of levels in tree
-#     max_depth = [int(x) for x in np.linspace(10, 110, num = 11)]
-#     max_depth.append(None)
-#     # Minimum number of samples required to split a node
-#     min_samples_split = [2, 5, 10]
-#     # Minimum number of samples required at each leaf node
-#     min_samples_leaf = [1, 2, 4]
-#     # Method of selecting samples for training each tree
-#     bootstrap = [True, False]
-#     # Create the random grid
-#     random_grid = {'n_estimators': n_estimators,
-#                 'max_features': max_features,
-#                 'max_depth': max_depth,
-#                 'min_samples_split': min_samples_split,
-#                 'min_samples_leaf': min_samples_leaf,
-#                 'bootstrap': bootstrap}
-#     # print(random_grid)
-#     return random_grid
 
 
 def noname():
@@ -457,8 +324,7 @@ def noname():
         y = df[output_column]
         # get_random_grid()
 
-        RandomForest_model(X,y)
-
+        RandomForest_repeated(X, y, n_repeats=200)
 
 
 

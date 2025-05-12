@@ -40,7 +40,7 @@ columns = ['Date',
            'Loại ao',
              'Công nghệ nuôi', 
              'area', 
-        #    'Giống tôm',
+           'Giống tôm',
             'Tuổi tôm', 
             'Mực nước', 'Amoni', 
             'Nitrat', 'Nitrit', 'Silica',
@@ -119,10 +119,20 @@ input_col4 = [
     # 'Độ cứng',
     # 'Độ màu',
     ]
+input_col_list = [
+    ["Độ trong", "Độ màu", "TDS", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    ["Độ màu", "TDS", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    ["TDS", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    ["Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    ["Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    ["Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    ["Độ trong", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Nhiệt độ", "pH", "Tuổi tôm"],
+    ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
+]
 
-input_col_list = [input_col1, input_col2,input_col3,
-                #   input_col4 
-                  ]
+# input_col_list = [input_col1, input_col2,input_col3,
+#                 #   input_col4 
+#                   ]
 
 output_folder = "output"
 
@@ -132,7 +142,7 @@ categorical_col = ['Date',
                    'Season', 
                    'Loại ao', 
                    'Công nghệ nuôi', 
-                #    'Giống tôm',
+                   'Giống tôm',
                    'units']
 
 categorical_usecol_all = [
