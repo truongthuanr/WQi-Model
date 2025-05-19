@@ -188,7 +188,51 @@ def plot_history(his):
     suffix = datetime.strftime(datetime.now(),"%y%m%d-%H%M%S")
     plt.savefig(os.path.join(output_folder,f"ANN_history_{suffix}.png"))
 
+def group_shap_values_by_feature(shap_values: np.ndarray,
+                                  encoder,
+                                  categorical_features: list,
+                                  numeric_features: list,
+                                  plot: bool = True,
+                                  save_path: str = None):
+    """
+    Gộp SHAP values theo feature gốc, sử dụng encoder đã fit.
+    
+    Parameters:
+        shap_values: ndarray (n_samples, n_features_after_encoding)
+        encoder: sklearn.preprocessing.OneHotEncoder đã fit
+        categorical_features: list các tên cột phân loại ban đầu
+        numeric_features: list các tên cột số
+        plot: True nếu muốn vẽ biểu đồ
+        save_path: nếu có, lưu biểu đồ tại đường dẫn chỉ định
 
+    Returns:
+        pd.Series: tầm quan trọng trung bình tuyệt đối của các feature gốc
+    """
+    feature_names = list(encoder.get_feature_names_out(categorical_features)) + numeric_features
+    shap_df = pd.DataFrame(shap_values, columns=feature_names)
+
+    # Mapping: one-hot column → original categorical feature
+    group_map = {}
+    for cat_feat in categorical_features:
+        for cat_val in encoder.categories_[categorical_features.index(cat_feat)]:
+            group_map[f"{cat_feat}_{cat_val}"] = cat_feat
+
+    for num_feat in numeric_features:
+        group_map[num_feat] = num_feat
+
+    # Gộp theo tên feature gốc
+    grouped_shap = shap_df.groupby(group_map, axis=1).mean()
+    summary = grouped_shap.abs().mean().sort_values(ascending=False)
+
+    if plot:
+        summary.plot(kind='barh', figsize=(8,6), title='Grouped SHAP Feature Importance')
+        plt.xlabel("Mean |SHAP value|")
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, dpi=300)
+        plt.show()
+
+    return summary
 
 
 def readdata() -> pd.DataFrame:
@@ -239,21 +283,7 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     fig= plt.figure(figsize=(10,5))
     ax = sns.boxplot(df1)
     ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
-    # plt.show()
     plt.savefig(os.path.join(output_folder,"boxplot1.png"))
-
-    # # lastday columns
-    # # Tạo thêm cột lastday-column chứa dữ liệu của ngày hôm trước
-    # # trong mỗi hàng, khởi tạo các cột với giá trị NaN
-    # # then, drop the NaN row
-    # ld_column = [f"ld_{col}" for col in output_column]
-    # df[ld_column] = np.NaN
-
-    # # Copy data của ngày hôm trước cho mỗi row
-    # unit_l = list(df['units'].unique())
-    # for unit in unit_l:
-    #     df.loc[df['units']==unit,ld_column] = df.loc[df['units']==unit,output_column].shift(1).to_numpy(copy=True)
-    # df.dropna(axis=0,inplace=True)
 
     df1 = df1[input_col+output_column].copy()
     df1.reset_index(drop=True,inplace=True)
@@ -265,7 +295,6 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     sns.boxenplot(df1)
     ax = plt.gca()
     ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
-    # plt.show()
     plt.savefig(os.path.join(output_folder,"boxplot2.png"))
 
 
@@ -273,13 +302,13 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     oh_enc = OneHotEncoder(sparse_output=False)
     oh_enc.fit(df1[categorical_usecol])
     oh_df = pd.DataFrame(oh_enc.transform(df1[categorical_usecol]),
-                     columns=oh_enc.get_feature_names_out()
+                     columns=oh_enc.get_feature_names_out(categorical_usecol)
                     )
     print(oh_df.columns)
     df1 = pd.concat([oh_df,df1],axis=1)
     df1.drop(categorical_usecol,inplace=True,axis=1)
 
-    return df1
+    return df1, oh_enc
 
 
 def RandomForest_model(X, y):
@@ -342,8 +371,14 @@ def RandomForest_model(X, y):
     explainer = shap.TreeExplainer(rf)
     shap_values = explainer.shap_values(X_sample)
 
-    # Plot tổng quan importance (global)
-    shap.summary_plot(shap_values, X_sample, feature_names=X.columns)
+    # Gộp và vẽ SHAP
+    grouped_summary = group_shap_values_by_feature(
+            shap_values=shap_values,
+            encoder=,
+            categorical_features=categorical_usecol,
+            numeric_features=input_col,
+            save_path="shap_grouped_summary.png"
+        )
     # Lưu thành file PNG
     plt.savefig("output/shap_summary_plot.png", dpi=300, bbox_inches='tight')
     plt.close()
@@ -684,7 +719,7 @@ def noname():
     df = datacleaning(df)
     # print(df.head())
 
-    df = preprocessingdata(df)
+    df, oh_enc = preprocessingdata(df)
     # print(df.columns)
     X = df.drop(output_column, axis=1)
     print()

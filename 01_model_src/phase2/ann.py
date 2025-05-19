@@ -46,13 +46,13 @@ columns = ['Date',
             #  'Canxi', 'Kali', 'Magie'
              ]
 input_col_list = [
-    ["DO", "Nhiệt độ", "Giống tôm", "area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
-    ["Nhiệt độ", "Giống tôm", "area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
-    ["Giống tôm", "area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
-    ["area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
-    ["TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
-    ["Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
-    ["DO", "Nhiệt độ", "Giống tôm", "area", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    # ["DO", "Nhiệt độ", "Giống tôm", "area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    # ["Nhiệt độ", "Giống tôm", "area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    # ["Giống tôm", "area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    # ["area", "TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    # ["TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    # ["Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
+    # ["DO", "Nhiệt độ", "Giống tôm", "area", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
     ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
 ]
 output_folder = "output"
@@ -284,7 +284,7 @@ def ANN_model_with_repeated_random_subsampling(X: pd.DataFrame, y: pd.DataFrame,
 
             # Train model
             history = model1.fit(X_train_tf, y_train_tf,
-                                epochs=300,
+                                epochs=200,
                                 batch_size=32,
                                 verbose=False,
                                 validation_split=0.2)
