@@ -210,25 +210,18 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     df_num = df.drop(categorical_col,axis=1).copy()
 
     df1 = df[(np.abs(stats.zscore(df_num))<zscore_lim).all(axis=1)].copy()
-    # print(f"{df1.columns=}")
-    # fig= plt.figure(figsize=(10,5))
-    # ax = sns.boxplot(df1)
-    # ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
-    # plt.show()
-    # plt.savefig(os.path.join(output_folder,"boxplot1.png"))
 
-    df1 = df1[input_col + output_column].copy()
+    # Giữ lại tất cả cột cần thiết cho huấn luyện
+    selected_cols = input_col + output_column
+
+    # ✅ Giữ lại thêm các cột lag nếu có
+    lag_cols = [col for col in df.columns if 'lag' in col]
+    selected_cols += lag_cols
+
+    df1 = df[selected_cols + categorical_usecol].copy()
+
+    # df1 = df1[input_col + output_column].copy()
     df1.reset_index(drop=True,inplace=True)
-
-    # df1.to_csv(os.path.join(output_folder,"databeforetrain1.csv"))
-
-    # print("Plot data!")
-    # plt.figure(figsize=(10,5))
-    # sns.boxenplot(df1)
-    # ax = plt.gca()
-    # ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
-    # plt.show()
-    # plt.savefig(os.path.join(output_folder,"boxplot2.png"))
 
     print("One hot encorder")
     oh_enc = OneHotEncoder(sparse_output=False)
@@ -244,20 +237,17 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
 
 
 def RandomForest_walk_forward(
-    X: pd.DataFrame, y: pd.DataFrame, initial_train_size: int = 100, step_size: int = 1, test_size: int = 1
+    X: pd.DataFrame, y: pd.DataFrame, initial_train_size: int = 1000, step_size: int = 1, test_size: int = 1
 ) -> Tuple[dict, List[float], List[float]]:
-    current_time = datetime.now()
-    log_dir = "./output"
-    os.makedirs(log_dir, exist_ok=True)
-    log_path = os.path.join(log_dir, f"randomforest_walkforward_{current_time.strftime('%y%m%d-%H%M%S')}.log")
 
-    logger = setup_logger(log_path)
 
-    logger.info("Random Forest - Walk-Forward Time Series Forecasting")
-    logger.info(f"Input columns: {list(X.columns)}")
-    logger.info(f"Initial Train Size: {initial_train_size}")
-    logger.info(f"Step Size: {step_size}, Test Size: {test_size}")
-    logger.info("RMSE\tMAE\tMAPE\tR2")
+
+
+    log_and_flush(logger, "Random Forest - Walk-Forward Time Series Forecasting")
+    log_and_flush(logger, f"Input columns: {list(X.columns)}")
+    log_and_flush(logger, f"Initial Train Size: {initial_train_size}")
+    log_and_flush(logger, f"Step Size: {step_size}, Test Size: {test_size}")
+    log_and_flush(logger, "RMSE\tMAE\tMAPE\tR2")
 
     metrics_result = {"RMSE": [], "MAE": [], "MAPE": [], "R2": []}
     y_test_all = []
@@ -310,19 +300,19 @@ def RandomForest_walk_forward(
         y_test_all.extend(y_true.flatten())
         y_pred_all.extend(y_pred.flatten())
 
-        logger.info(f"{rmse:.3f}\t{mae:.3f}\t{mape:.3f}\t{r2:.3f}")
-        logger.info(f"Step {start} completed in {time.time() - start_time:.2f} seconds")
+        log_and_flush(logger, f"{rmse:.3f}\t{mae:.3f}\t{mape:.3f}\t{r2:.3f}")
+        log_and_flush(logger, f"Step {start} completed in {time.time() - start_time:.2f} seconds")
 
-    logger.info("----- Summary (Mean ± Std) -----")
+    log_and_flush(logger, "----- Summary (Mean ± Std) -----")
     for k in metrics_result:
         mean_val = np.mean(metrics_result[k])
         std_val = np.std(metrics_result[k])
-        logger.info(f"{k}: {mean_val:.3f} ± {std_val:.3f}")
+        log_and_flush(logger, f"{k}: {mean_val:.3f} ± {std_val:.3f}")
 
     return metrics_result, y_test_all, y_pred_all
 
 
-def plot_walk_forward_metrics(metrics_result: dict):
+def plot_walk_forward_metrics(metrics_result: dict, save_path: str = "walk_forward_metrics.png"):
     plt.figure(figsize=(14, 6))
     for idx, (key, values) in enumerate(metrics_result.items(), 1):
         plt.subplot(2, 2, idx)
@@ -332,10 +322,12 @@ def plot_walk_forward_metrics(metrics_result: dict):
         plt.ylabel(key)
         plt.grid(True)
     plt.tight_layout()
-    plt.show()
+    plt.savefig(save_path)
+    plt.close()
 
 
-def plot_predictions_over_time(y_true: List[float], y_pred: List[float]):
+
+def plot_predictions_over_time(y_true: List[float], y_pred: List[float], save_path: str = "predictions_over_time.png"):
     plt.figure(figsize=(16, 5))
     plt.plot(y_true, label='Actual', linewidth=2)
     plt.plot(y_pred, label='Predicted', linestyle='--')
@@ -345,7 +337,8 @@ def plot_predictions_over_time(y_true: List[float], y_pred: List[float]):
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.show()
+    plt.savefig(save_path)
+    plt.close()
 
 def noname():
 
@@ -357,7 +350,14 @@ def noname():
     currenttime = datetime.now()
     global input_col 
     global categorical_usecol
+    global logger 
+    log_dir = "./output"
+    os.makedirs(log_dir, exist_ok=True)
+    current_time = datetime.now()
+    log_path = os.path.join(log_dir, f"randomforest_walkforward_{current_time.strftime('%y%m%d-%H%M%S')}.log")
+    logger = setup_logger(log_path)
     for _input_col in input_col_list:
+        log_and_flush(logger,f"Input: {_input_col}")
         df = readdata()
         df = datacleaning(df)
         input_col = _input_col
@@ -373,15 +373,15 @@ def noname():
         print(f"{X.columns=}")
         y = df[output_column]
 
-    metrics_result, y_true, y_pred = RandomForest_walk_forward(
-    X, y,
-    initial_train_size=100,
-    step_size=10,
-    test_size=2
-)
+        metrics_result, y_true, y_pred = RandomForest_walk_forward(
+        X, y,
+        initial_train_size=1000,
+        step_size=10,
+        test_size=1
+        )
 
-    plot_walk_forward_metrics(metrics_result)
-    plot_predictions_over_time(y_true, y_pred)
+        plot_walk_forward_metrics(metrics_result, save_path=f"{output_folder}/walk_forward_metrics.png")
+        plot_predictions_over_time(y_true, y_pred,save_path=f"{output_folder}/predictions_over_time.png")
 
 
 if __name__ == "__main__":
