@@ -30,6 +30,7 @@ from sklearn import svm
 from scikeras.wrappers import KerasRegressor
 import matplotlib
 import time
+from typing import Tuple, List
 
 from sklearn.utils import shuffle
 
@@ -209,7 +210,7 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     df_num = df.drop(categorical_col,axis=1).copy()
 
     df1 = df[(np.abs(stats.zscore(df_num))<zscore_lim).all(axis=1)].copy()
-    print(f"{df1.columns=}")
+    # print(f"{df1.columns=}")
     # fig= plt.figure(figsize=(10,5))
     # ax = sns.boxplot(df1)
     # ax.set_xticklabels(ax.get_xticklabels(),rotation=60)
@@ -242,48 +243,42 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     return df1
 
 
-def RandomForest_time_series(X: pd.DataFrame, y: pd.DataFrame, n_repeats: int = 10, test_size: float = 0.30):
-    currenttime = datetime.now()
-    _currenttime = currenttime.strftime("%y%m%d-%H%M%S")
-    log_path = f"./output/randomforest_timeseries_{_currenttime}.log"
-
-    os.makedirs("./output", exist_ok=True)
+def RandomForest_walk_forward(
+    X: pd.DataFrame, y: pd.DataFrame, initial_train_size: int = 100, step_size: int = 1, test_size: int = 1
+) -> Tuple[dict, List[float], List[float]]:
+    current_time = datetime.now()
+    log_dir = "./output"
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f"randomforest_walkforward_{current_time.strftime('%y%m%d-%H%M%S')}.log")
 
     logger = setup_logger(log_path)
-    log_and_flush(logger, "Random Forest - Time Series Forecasting")
-    log_and_flush(logger, f"Time Record: {currenttime.strftime('%y-%m-%d %H:%M:%S')}")
-    log_and_flush(logger, f"Input columns: {list(X.columns)}")
-    log_and_flush(logger, f"Repeats: {n_repeats}")
-    log_and_flush(logger, f"Test size: {test_size}")
-    log_and_flush(logger, f"Data length: {len(X)}")
 
-    log_and_flush(logger, "RMSE\tMAE\tMAPE\tR2")
+    logger.info("Random Forest - Walk-Forward Time Series Forecasting")
+    logger.info(f"Input columns: {list(X.columns)}")
+    logger.info(f"Initial Train Size: {initial_train_size}")
+    logger.info(f"Step Size: {step_size}, Test Size: {test_size}")
+    logger.info("RMSE\tMAE\tMAPE\tR2")
 
     metrics_result = {"RMSE": [], "MAE": [], "MAPE": [], "R2": []}
+    y_test_all = []
+    y_pred_all = []
 
-    for repeat in range(n_repeats):
+    for start in range(0, len(X) - initial_train_size - test_size + 1, step_size):
         start_time = time.time()
 
-        train_size = int(len(X) * (1 - test_size))
-        offset = repeat * int(len(X) * 0.05)  # Sliding window offset
-        log_and_flush(logger, f"Offset repeat: {offset}")
+        train_end = start + initial_train_size
+        test_end = train_end + test_size
 
+        X_train = X.iloc[start:train_end]
+        y_train = y.iloc[start:train_end]
+        X_test = X.iloc[train_end:test_end]
+        y_test = y.iloc[train_end:test_end]
 
+        X_scaler = StandardScaler()
+        y_scaler = StandardScaler()
 
-        if offset + train_size + 1 >= len(X):
-            log_and_flush(logger, f"Break loop at repeat {repeat} because offset exceeded data length")
-            break
-
-        X_train = X.iloc[offset:offset + train_size]
-        y_train = y.iloc[offset:offset + train_size]
-        X_test = X.iloc[offset + train_size:]
-        y_test = y.iloc[offset + train_size:]
-
-        # Chuẩn hóa
-        X_sc = StandardScaler()
-        y_sc = StandardScaler()
-        X_train_tf = X_sc.fit_transform(X_train)
-        y_train_tf = y_sc.fit_transform(y_train.values.reshape(-1, 1))
+        X_train_scaled = X_scaler.fit_transform(X_train)
+        y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1))
 
         rf = RandomForestRegressor(
             n_estimators=800,
@@ -291,39 +286,66 @@ def RandomForest_time_series(X: pd.DataFrame, y: pd.DataFrame, n_repeats: int = 
             min_samples_split=2,
             min_samples_leaf=2,
             max_features='sqrt',
-            random_state=repeat,
+            random_state=start,
             bootstrap=False,
             verbose=0
         )
 
-        rf.fit(X_train_tf, y_train_tf.ravel())
-        y_pred = rf.predict(X_sc.transform(X_test)).reshape(-1, 1)
-        y_pred_inv = y_sc.inverse_transform(y_pred)
-        y_test_np = y_test.values.reshape(-1, 1)
+        rf.fit(X_train_scaled, y_train_scaled.ravel())
 
-        # Tính các metric (tự định nghĩa hoặc import hàm root_mean_squared_error)
-        rmse = root_mean_squared_error(y_test_np, y_pred_inv)
-        mae = mean_absolute_error(y_test_np, y_pred_inv)
-        mape = mean_absolute_percentage_error(y_test_np, y_pred_inv) * 100
-        r2 = r2_score(y_test_np, y_pred_inv)
+        y_pred_scaled = rf.predict(X_scaler.transform(X_test)).reshape(-1, 1)
+        y_pred = y_scaler.inverse_transform(y_pred_scaled)
+        y_true = y_test.values.reshape(-1, 1)
+
+        rmse = root_mean_squared_error(y_true, y_pred)
+        mae = mean_absolute_error(y_true, y_pred)
+        mape = mean_absolute_percentage_error(y_true, y_pred) * 100
+        r2 = r2_score(y_true, y_pred)
 
         metrics_result["RMSE"].append(rmse)
         metrics_result["MAE"].append(mae)
         metrics_result["MAPE"].append(mape)
         metrics_result["R2"].append(r2)
 
-        log_and_flush(logger, f"{rmse:.3f}\t{mae:.3f}\t{mape:.3f}\t{r2:.3f}")
+        y_test_all.extend(y_true.flatten())
+        y_pred_all.extend(y_pred.flatten())
 
-        elapsed = time.time() - start_time
-        log_and_flush(logger, f"Repeat {repeat} done in {elapsed:.2f} seconds")
+        logger.info(f"{rmse:.3f}\t{mae:.3f}\t{mape:.3f}\t{r2:.3f}")
+        logger.info(f"Step {start} completed in {time.time() - start_time:.2f} seconds")
 
-    # Summary
-    log_and_flush(logger, "----- Summary (Mean ± Std) -----")
+    logger.info("----- Summary (Mean ± Std) -----")
     for k in metrics_result:
         mean_val = np.mean(metrics_result[k])
         std_val = np.std(metrics_result[k])
-        log_and_flush(logger, f"{k}: {mean_val:.3f} ± {std_val:.3f}")
+        logger.info(f"{k}: {mean_val:.3f} ± {std_val:.3f}")
 
+    return metrics_result, y_test_all, y_pred_all
+
+
+def plot_walk_forward_metrics(metrics_result: dict):
+    plt.figure(figsize=(14, 6))
+    for idx, (key, values) in enumerate(metrics_result.items(), 1):
+        plt.subplot(2, 2, idx)
+        plt.plot(values, marker='o')
+        plt.title(f"{key} per Walk-Forward Step")
+        plt.xlabel("Step")
+        plt.ylabel(key)
+        plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_predictions_over_time(y_true: List[float], y_pred: List[float]):
+    plt.figure(figsize=(16, 5))
+    plt.plot(y_true, label='Actual', linewidth=2)
+    plt.plot(y_pred, label='Predicted', linestyle='--')
+    plt.title("Actual vs Predicted Values Over Time (Walk-Forward)", fontsize=14)
+    plt.xlabel("Time Step")
+    plt.ylabel("Target")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
 def noname():
 
@@ -343,6 +365,7 @@ def noname():
         print(f"{categorical_usecol=}")
         df = create_sliding_window_by_unit(df)
         df = preprocessingdata(df)
+        
         df.to_csv(os.path.join(output_folder,"databeforetrain1.csv"))
 
         X = df.drop(output_column, axis=1)
@@ -350,9 +373,15 @@ def noname():
         print(f"{X.columns=}")
         y = df[output_column]
 
+    metrics_result, y_true, y_pred = RandomForest_walk_forward(
+    X, y,
+    initial_train_size=100,
+    step_size=10,
+    test_size=2
+)
 
-        RandomForest_time_series(X, y, n_repeats=200)
-
+    plot_walk_forward_metrics(metrics_result)
+    plot_predictions_over_time(y_true, y_pred)
 
 
 if __name__ == "__main__":
