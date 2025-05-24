@@ -153,6 +153,8 @@ def create_sliding_window_by_unit(df: pd.DataFrame, column: str = 'Độ kiềm'
     """
     Tạo lag features cho cột column với window_size, áp dụng riêng biệt cho từng 'unit'
     """
+    log_and_flush(logger, f"Create lag feature, window size: {window_size}")
+    log_and_flush(logger, f"Data columns: {df.columns}")
     df_sorted = df.sort_values(by=['units', 'Date']).copy()
     lagged_dfs = []
 
@@ -236,14 +238,18 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     return df1
 
 
-def RandomForest_walk_forward(
-    X: pd.DataFrame, y: pd.DataFrame, initial_train_size: int = 1000, step_size: int = 1, test_size: int = 1
+def RandomForest_sliding_cv(
+    X: pd.DataFrame, y: pd.DataFrame, initial_train_size: int = 1000, step_size: int =10, test_size: int = 7
 ) -> Tuple[dict, List[float], List[float]]:
+    """
+    Sliding Window Cross-Validation for Random Forest Regression.
 
+    - initial_train_size: số lượng mẫu dùng huấn luyện ban đầu.
+    - test_size: số record được dự báo ở mỗi bước (để tính được R2, RMSE).
+    - step_size: số bước trượt của cửa sổ test mỗi vòng (nên để = 1 để sliding).
+    """
 
-
-
-    log_and_flush(logger, "Random Forest - Walk-Forward Time Series Forecasting")
+    log_and_flush(logger, "Random Forest - Sliding Window Time Series Cross-Validation")
     log_and_flush(logger, f"Input columns: {list(X.columns)}")
     log_and_flush(logger, f"Initial Train Size: {initial_train_size}")
     log_and_flush(logger, f"Step Size: {step_size}, Test Size: {test_size}")
@@ -264,6 +270,7 @@ def RandomForest_walk_forward(
         X_test = X.iloc[train_end:test_end]
         y_test = y.iloc[train_end:test_end]
 
+        # Chuẩn hóa
         X_scaler = StandardScaler()
         y_scaler = StandardScaler()
 
@@ -271,10 +278,10 @@ def RandomForest_walk_forward(
         y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1))
 
         rf = RandomForestRegressor(
-            n_estimators=800,
-            max_depth=50,
-            min_samples_split=2,
-            min_samples_leaf=2,
+            n_estimators=300,
+            max_depth=20,
+            min_samples_split=5,
+            min_samples_leaf=5,
             max_features='sqrt',
             random_state=start,
             bootstrap=False,
@@ -354,7 +361,7 @@ def noname():
     log_dir = "./output"
     os.makedirs(log_dir, exist_ok=True)
     current_time = datetime.now()
-    log_path = os.path.join(log_dir, f"randomforest_walkforward_{current_time.strftime('%y%m%d-%H%M%S')}.log")
+    log_path = os.path.join(log_dir, f"randomforest_{current_time.strftime('%y%m%d-%H%M%S')}.log")
     logger = setup_logger(log_path)
     for _input_col in input_col_list:
         log_and_flush(logger,f"Input: {_input_col}")
@@ -363,7 +370,7 @@ def noname():
         input_col = _input_col
         categorical_usecol = [_col for _col in categorical_usecol_all if _col in _input_col]
         print(f"{categorical_usecol=}")
-        df = create_sliding_window_by_unit(df)
+        df = create_sliding_window_by_unit(df,window_size=1)
         df = preprocessingdata(df)
         
         df.to_csv(os.path.join(output_folder,"databeforetrain1.csv"))
@@ -373,15 +380,16 @@ def noname():
         print(f"{X.columns=}")
         y = df[output_column]
 
-        metrics_result, y_true, y_pred = RandomForest_walk_forward(
+        metrics_result, y_true, y_pred = RandomForest_sliding_cv(
         X, y,
-        initial_train_size=1000,
-        step_size=10,
-        test_size=1
+        initial_train_size=1500,
+        step_size=5,
+        test_size=100
         )
+        log_and_flush(logger, f"Plotting..., time subfix: {currenttime.strftime('%y%m%d-%H%M%S')}")
 
-        plot_walk_forward_metrics(metrics_result, save_path=f"{output_folder}/walk_forward_metrics.png")
-        plot_predictions_over_time(y_true, y_pred,save_path=f"{output_folder}/predictions_over_time.png")
+        plot_walk_forward_metrics(metrics_result, save_path=f"{output_folder}/metrics_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
+        plot_predictions_over_time(y_true, y_pred,save_path=f"{output_folder}/predictions_over_time_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
 
 
 if __name__ == "__main__":
