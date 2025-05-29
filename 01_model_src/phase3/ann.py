@@ -53,12 +53,11 @@ columns = ['Date',
 
 
 input_col_list = [
-    
-    ['Nhiệt độ', 'Độ màu', 'area', 'Độ mặn', 'Loại ao', 'Độ cứng', 'TDS', 'pH', 'Tuổi tôm'],
-    ['Nhiệt độ', 'Độ màu', 'area', 'Độ mặn', 'Loại ao', 'Độ cứng', 'TDS', 'pH', 'Tuổi tôm', 'Độ kiềm'],
-    ['Độ màu', 'area', 'Độ mặn', 'Loại ao', 'Độ cứng', 'TDS', 'pH', 'Tuổi tôm'],
-    ['Độ màu', 'area', 'Độ mặn', 'Loại ao', 'Độ cứng', 'TDS', 'pH', 'Tuổi tôm', 'Độ kiềm']
 
+     ['Giống tôm', 'area', 'TDS', 'Độ cứng', 'pH', 'Loại ao', 'Công nghệ nuôi', 'Tuổi tôm'],
+    ['Giống tôm', 'area', 'TDS', 'Độ cứng', 'pH', 'Loại ao', 'Công nghệ nuôi', 'Tuổi tôm', 'Độ kiềm'],
+    ['Nhiệt độ', 'Giống tôm', 'area', 'TDS', 'Độ cứng', 'pH', 'Loại ao', 'Công nghệ nuôi', 'Tuổi tôm'],
+    ['Nhiệt độ', 'Giống tôm', 'area', 'TDS', 'Độ cứng', 'pH', 'Loại ao', 'Công nghệ nuôi', 'Tuổi tôm', 'Độ kiềm']
 ]
 
 output_folder = "output"
@@ -259,7 +258,7 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     return df1
 
 
-def RandomForest_random_cv(
+def Ann_random_cv(
     X: pd.DataFrame,
     y: pd.DataFrame,
     n_splits: int = 10,
@@ -267,7 +266,7 @@ def RandomForest_random_cv(
     random_state: int = 42
 ) -> Tuple[dict, List[float], List[float]]:
     """
-    Random Cross-Validation for Random Forest Regression (non-sliding).
+    Random Cross-Validation for ANN (non-sliding).
 
     Parameters:
     - X, y: DataFrames with lag features already embedded
@@ -280,7 +279,7 @@ def RandomForest_random_cv(
     - y_test_all: list of all test targets across folds
     - y_pred_all: list of all predicted values across folds
     """
-    log_and_flush(logger, "Random Forest - Random Cross-Validation")
+    log_and_flush(logger, "ANN - Random Cross-Validation")
     log_and_flush(logger, f"Input columns: {list(X.columns)}")
     log_and_flush(logger, f"CV Folds: {n_splits}, Test size: {test_size}")
 
@@ -305,20 +304,41 @@ def RandomForest_random_cv(
         X_train_scaled = X_scaler.fit_transform(X_train)
         y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1))
 
-        rf = RandomForestRegressor(
-            n_estimators=300,
-            max_depth=20,
-            min_samples_split=5,
-            min_samples_leaf=5,
-            max_features='sqrt',
-            random_state=fold,
-            bootstrap=False,
-            verbose=0
-        )
+        # define the model
+        model1 = Sequential()
+        inputshape = len(X.columns)
+        model1.add(Input(shape=(inputshape,)))
+        # Layer #
+        model1.add(Dense(72,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
+        # # Layer #
+        model1.add(Dense(60,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
+        # # Layer #
+        model1.add(Dense(32,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
 
-        rf.fit(X_train_scaled, y_train_scaled.ravel())
+        # Layer #
+        model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
 
-        y_pred_scaled = rf.predict(X_scaler.transform(X_test)).reshape(-1, 1)
+        model1.add(Dense(1))
+        model1.compile(loss='mae', 
+                    optimizer='nadam',
+                    metrics=['accuracy','r2_score']
+                    )
+        # model1.summary()
+
+
+        # Train model
+        history = model1.fit(X_train_scaled,  y_train_scaled.ravel(),
+                            epochs=200,
+                            batch_size=32,
+                            verbose=False,
+                            validation_split=0.2)
+
+  
+        y_pred_scaled = model1.predict(X_scaler.transform(X_test)).reshape(-1, 1)
         y_pred = y_scaler.inverse_transform(y_pred_scaled)
         y_true = y_test.values.reshape(-1, 1)
 
@@ -423,7 +443,7 @@ def noname():
     log_dir = "./output"
     os.makedirs(log_dir, exist_ok=True)
     current_time = datetime.now()
-    log_path = os.path.join(log_dir, f"randomforest_{current_time.strftime('%y%m%d-%H%M%S')}.log")
+    log_path = os.path.join(log_dir, f"ann_{current_time.strftime('%y%m%d-%H%M%S')}.log")
     logger = setup_logger(log_path)
     for _input_col in input_col_list:
         log_and_flush(logger,f"Input: {_input_col}")
@@ -441,7 +461,7 @@ def noname():
         print()
         print(f"{X.columns=}")
         y = df[output_column]
-        metrics_result, y_true, y_pred = RandomForest_random_cv(
+        metrics_result, y_true, y_pred = Ann_random_cv(
         X, y,
         n_splits=50,
         test_size=0.3

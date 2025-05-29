@@ -53,12 +53,8 @@ columns = ['Date',
 
 
 input_col_list = [
-    
-    ['Nhiệt độ', 'Độ màu', 'area', 'Độ mặn', 'Loại ao', 'Độ cứng', 'TDS', 'pH', 'Tuổi tôm'],
-    ['Nhiệt độ', 'Độ màu', 'area', 'Độ mặn', 'Loại ao', 'Độ cứng', 'TDS', 'pH', 'Tuổi tôm', 'Độ kiềm'],
-    ['Độ màu', 'area', 'Độ mặn', 'Loại ao', 'Độ cứng', 'TDS', 'pH', 'Tuổi tôm'],
-    ['Độ màu', 'area', 'Độ mặn', 'Loại ao', 'Độ cứng', 'TDS', 'pH', 'Tuổi tôm', 'Độ kiềm']
-
+        ['Độ trong', 'Độ cứng', 'Độ mặn', 'Nhiệt độ', 'TDS', 'Loại ao', 'Công nghệ nuôi', 'pH', 'Tuổi tôm'],
+    ['Độ cứng', 'Độ mặn', 'Nhiệt độ', 'TDS', 'Loại ao', 'Công nghệ nuôi', 'pH', 'Tuổi tôm']
 ]
 
 output_folder = "output"
@@ -83,7 +79,7 @@ zscore_lim =  3
 shiftday = -3
 
 def setup_logger(log_path):
-    logger = logging.getLogger('TimeSeriesRF')
+    logger = logging.getLogger('TimeSeriesGBT')
     logger.setLevel(logging.INFO)
 
     handler = RotatingFileHandler(log_path, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')
@@ -259,7 +255,7 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     return df1
 
 
-def RandomForest_random_cv(
+def GBT_random_cv(
     X: pd.DataFrame,
     y: pd.DataFrame,
     n_splits: int = 10,
@@ -267,7 +263,7 @@ def RandomForest_random_cv(
     random_state: int = 42
 ) -> Tuple[dict, List[float], List[float]]:
     """
-    Random Cross-Validation for Random Forest Regression (non-sliding).
+    Random Cross-Validation for Gradient Boosted Tree (non-sliding).
 
     Parameters:
     - X, y: DataFrames with lag features already embedded
@@ -280,7 +276,7 @@ def RandomForest_random_cv(
     - y_test_all: list of all test targets across folds
     - y_pred_all: list of all predicted values across folds
     """
-    log_and_flush(logger, "Random Forest - Random Cross-Validation")
+    log_and_flush(logger, "Gradient Boosted Tree - Random Cross-Validation")
     log_and_flush(logger, f"Input columns: {list(X.columns)}")
     log_and_flush(logger, f"CV Folds: {n_splits}, Test size: {test_size}")
 
@@ -305,20 +301,20 @@ def RandomForest_random_cv(
         X_train_scaled = X_scaler.fit_transform(X_train)
         y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1))
 
-        rf = RandomForestRegressor(
-            n_estimators=300,
-            max_depth=20,
-            min_samples_split=5,
-            min_samples_leaf=5,
-            max_features='sqrt',
-            random_state=fold,
-            bootstrap=False,
-            verbose=0
-        )
+        gbr = GradientBoostingRegressor(n_estimators=100,
+                                max_depth=10,
+                                min_samples_split=10,
+                                min_samples_leaf=5,
+                                max_features='sqrt', 
+                                loss='squared_error',
+                                random_state=0,
+                                learning_rate=0.02,
+                                verbose=0,
+                                )
 
-        rf.fit(X_train_scaled, y_train_scaled.ravel())
+        gbr.fit(X_train_scaled, y_train_scaled.ravel())
 
-        y_pred_scaled = rf.predict(X_scaler.transform(X_test)).reshape(-1, 1)
+        y_pred_scaled = gbr.predict(X_scaler.transform(X_test)).reshape(-1, 1)
         y_pred = y_scaler.inverse_transform(y_pred_scaled)
         y_true = y_test.values.reshape(-1, 1)
 
@@ -423,7 +419,7 @@ def noname():
     log_dir = "./output"
     os.makedirs(log_dir, exist_ok=True)
     current_time = datetime.now()
-    log_path = os.path.join(log_dir, f"randomforest_{current_time.strftime('%y%m%d-%H%M%S')}.log")
+    log_path = os.path.join(log_dir, f"gbt_{current_time.strftime('%y%m%d-%H%M%S')}.log")
     logger = setup_logger(log_path)
     for _input_col in input_col_list:
         log_and_flush(logger,f"Input: {_input_col}")
@@ -441,7 +437,7 @@ def noname():
         print()
         print(f"{X.columns=}")
         y = df[output_column]
-        metrics_result, y_true, y_pred = RandomForest_random_cv(
+        metrics_result, y_true, y_pred = GBT_random_cv(
         X, y,
         n_splits=50,
         test_size=0.3
@@ -450,6 +446,8 @@ def noname():
 
         plot_walk_forward_metrics(metrics_result, save_path=f"{output_folder}/metrics_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
         # plot_predictions_over_time(y_true, y_pred,save_path=f"{output_folder}/predictions_over_time_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
+    
+    log_and_flush(logger, f"--- End program ---")
 
 
 
