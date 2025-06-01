@@ -33,6 +33,7 @@ import time
 from typing import Tuple, List
 from sklearn.model_selection import ShuffleSplit
 from sklearn.utils import shuffle
+from collections import defaultdict
 
 
 columns = ['Date', 
@@ -52,12 +53,18 @@ columns = ['Date',
              ]
 
 
-input_col_list = [
-    #     ['Độ trong', 'Độ cứng', 'Độ mặn', 'Nhiệt độ', 'TDS', 'Loại ao', 'Công nghệ nuôi', 'pH', 'Tuổi tôm'],
-    # ['Độ cứng', 'Độ mặn', 'Nhiệt độ', 'TDS', 'Loại ao', 'Công nghệ nuôi', 'pH', 'Tuổi tôm']
-    ['Độ trong', 'Độ cứng', 'Độ mặn', 'Nhiệt độ', 'TDS', 'Loại ao', 'Công nghệ nuôi', 'pH', 'Tuổi tôm', 'Độ kiềm'],
-    ['Độ cứng', 'Độ mặn', 'Nhiệt độ', 'TDS', 'Loại ao', 'Công nghệ nuôi', 'pH', 'Tuổi tôm', 'Độ kiềm']
-]
+
+input_col_today = ['Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm', 'Ngày thả', 'area', 'Tuổi tôm',
+                    'Nhiệt độ', 'pH', 'Độ mặn', 'Mực nước', 'Độ trong', 'Độ kiềm']
+
+input_col_tomorrow = ['Độ màu', 'area', 'Độ mặn', 'Loại ao', 'Độ cứng', 'TDS', 'pH', 'Tuổi tôm', 'Độ kiềm tdpred']  # độ kiềm dự đoán sẽ được thêm sau
+
+# predict_input_col= [
+#     'Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm', 'Ngày thả', 
+#     'area', 'Tuổi tôm', 'Nhiệt độ', 'pH', 'Độ mặn', 'Mực nước', 'Độ trong'
+# ]
+
+# col_need = list(set(input_col_list + predict_input_col))
 
 output_folder = "output"
 
@@ -81,7 +88,7 @@ zscore_lim =  3
 shiftday = -3
 
 def setup_logger(log_path):
-    logger = logging.getLogger('TimeSeriesGBT')
+    logger = logging.getLogger('TimeSeriesRF')
     logger.setLevel(logging.INFO)
 
     handler = RotatingFileHandler(log_path, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')
@@ -98,54 +105,6 @@ def log_and_flush(logger, msg):
     for handler in logger.handlers:
         handler.flush()
     
-def plot_result(y_test,y_pred,output_column,modelname: str):
-    fig = plt.figure(figsize = [8,8])
-    for i,col in enumerate(output_column):
-        # plt.subplot(3,3,i+1)
-        plt.scatter(x=y_test[:,i],
-                    y=y_pred[:,i],
-                    marker = 'X',
-                    lw=0.5,
-                    s=10,
-                    color=matplotlib.cm.tab20.colors[0])
-        lim = [plt.xlim()[0],plt.xlim()[1]]
-        plt.plot(lim,lim,
-                color='grey')
-        plt.title(col,
-                    fontsize='small')
-        error_text = f"RMSE: {root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}" + "\n" +\
-                     f"MAE: {mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"+ "\n" +\
-                     f"MAPE: {mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}%"+ "\n" +\
-                     f"R2 Score: {r2_score(y_test[:,i],y_pred[:,i]):.3f}"
-                     
-        plt.text(x=lim[0]+(lim[1]-lim[0])*0.1,
-                 y=lim[0]+(lim[1]-lim[0])*0.9,
-                 s=error_text)
-        plt.xlabel('True Value')
-        plt.ylabel('Predicted Value')
-        
-    fig.suptitle(modelname)       
-    plt.tight_layout()
-    # plt.show()
-    suffix = datetime.strftime(datetime.now(),"%y%m%d-%H%M%S")
-    plt.savefig(os.path.join(output_folder,f"{modelname}_{suffix}.png"))
-
-
-    # print(y_test[:,0])
-    # print(y_pred[:,0])
-
-    fig2 = plt.figure(figsize = [8,8])
-    ind = np.argsort(y_test[:,0])
-    # print(ind)
-    plt.plot(y_test[ind],label="True value")
-    plt.plot(y_pred[ind],label="Predict value",
-             ls="",
-             marker="x")
-    plt.legend()
-    plt.xlabel("Samples")
-    plt.title(f"Ground Truth and Predicted value - {modelname}")
-    plt.savefig(os.path.join(output_folder,f"{modelname}_GroundTruth_{suffix}.png"))
-
 def create_lag_features_and_target_tomorrow(
     df: pd.DataFrame, column: str = 'Độ kiềm', window_size: int = 5
 ) -> pd.DataFrame:
@@ -257,95 +216,99 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     return df1
 
 
-def GBT_random_cv(
-    X: pd.DataFrame,
-    y: pd.DataFrame,
-    n_splits: int = 10,
-    test_size: float = 0.3,
-    random_state: int = 42
-) -> Tuple[dict, List[float], List[float]]:
-    """
-    Random Cross-Validation for Gradient Boosted Tree (non-sliding).
-
-    Parameters:
-    - X, y: DataFrames with lag features already embedded
-    - n_splits: number of cross-validation folds
-    - test_size: proportion of test set (float, e.g., 0.1 for 10%)
-    - random_state: random seed for reproducibility
-
-    Returns:
-    - metrics_result: dict of metrics with mean and std
-    - y_test_all: list of all test targets across folds
-    - y_pred_all: list of all predicted values across folds
-    """
-    log_and_flush(logger, "Gradient Boosted Tree - Random Cross-Validation")
-    log_and_flush(logger, f"Input columns: {list(X.columns)}")
-    log_and_flush(logger, f"CV Folds: {n_splits}, Test size: {test_size}")
-
-    splitter = ShuffleSplit(n_splits=n_splits, test_size=test_size, random_state=random_state)
+def RandomForest_random_cv_joint(
+    X_today, X_tomorrow_base, y_today, y_tomorrow,
+    input_col_today, input_col_tomorrow,
+    n_splits=5, test_size=0.2, random_state=42
+):
+    ss = ShuffleSplit(n_splits=n_splits, test_size=test_size, random_state=random_state)
+    fold = 1
+    results = defaultdict(list)
 
     metrics_result = {"RMSE": [], "MAE": [], "MAPE": [], "R2": []}
+
     y_test_all = []
     y_pred_all = []
 
-    fold = 0
-    for train_index, test_index in splitter.split(X):
-        fold += 1
-        start_time = time.time()
+    for train_idx, test_idx in ss.split(X_today):
+        log_and_flush(logger, f"Fold {fold}:")
 
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+        # === BƯỚC 1: Dự đoán Độ kiềm hôm nay ===
+        model_today = RandomForestRegressor(
+            n_estimators=300,
+            max_depth=20,
+            min_samples_split=5,
+            min_samples_leaf=5,
+            max_features='sqrt',
+            random_state=random_state,
+            bootstrap=False,
+            verbose=0
+        )
+        
+        model_today.fit(X_today.iloc[train_idx], y_today.iloc[train_idx])
 
-        # Chuẩn hóa
-        X_scaler = StandardScaler()
-        y_scaler = StandardScaler()
+        alkaline_today_pred = model_today.predict(X_today.iloc[test_idx])
 
-        X_train_scaled = X_scaler.fit_transform(X_train)
-        y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1))
+        # === BƯỚC 2: Dự đoán Độ kiềm ngày mai ===
+        # Gộp dự đoán độ kiềm hôm nay vào input cho ngày mai
+        X_tomorrow_train = X_tomorrow_base.iloc[train_idx].copy()
+        X_tomorrow_test = X_tomorrow_base.iloc[test_idx].copy()
+        X_tomorrow_test["Độ kiềm tdpred"] = alkaline_today_pred
 
-        gbr = GradientBoostingRegressor(n_estimators=100,
-                                max_depth=10,
-                                min_samples_split=10,
+        model_tomorrow = RandomForestRegressor(
+                                n_estimators=300,
+                                max_depth=20,
+                                min_samples_split=5,
                                 min_samples_leaf=5,
-                                max_features='sqrt', 
-                                loss='squared_error',
-                                random_state=0,
-                                learning_rate=0.02,
-                                verbose=0,
-                                )
+                                max_features='sqrt',
+                                random_state=random_state,
+                                bootstrap=False,
+                                verbose=0
+                            )
 
-        gbr.fit(X_train_scaled, y_train_scaled.ravel())
+        model_tomorrow.fit(X_tomorrow_train.assign(**{"Độ kiềm tdpred": y_today.iloc[train_idx]}), y_tomorrow.iloc[train_idx])
 
-        y_pred_scaled = gbr.predict(X_scaler.transform(X_test)).reshape(-1, 1)
-        y_pred = y_scaler.inverse_transform(y_pred_scaled)
-        y_true = y_test.values.reshape(-1, 1)
+        y_pred = model_tomorrow.predict(X_tomorrow_test)
+        y_test = y_tomorrow.iloc[test_idx]
 
-        rmse = root_mean_squared_error(y_true, y_pred)
-        mae = mean_absolute_error(y_true, y_pred)
-        mape = mean_absolute_percentage_error(y_true, y_pred) * 100
-        r2 = r2_score(y_true, y_pred)
+        # Ghi kết quả
+        y_test_all.extend(y_test)
+        y_pred_all.extend(y_pred)
+
+        # Tính metrics
+        fold_metrics = {
+            "MAE": mean_absolute_error(y_test, y_pred),
+            "RMSE": root_mean_squared_error(y_test, y_pred),
+            "MAPE": mean_absolute_percentage_error(y_test, y_pred),
+            "R2": r2_score(y_test, y_pred)
+        }
+
+        # Tính metrics
+        rmse = root_mean_squared_error(y_test, y_pred)
+        mae = mean_absolute_error(y_test, y_pred)
+        mape = mean_absolute_percentage_error(y_test, y_pred) * 100
+        r2 = r2_score(y_test, y_pred)
 
         metrics_result["RMSE"].append(rmse)
         metrics_result["MAE"].append(mae)
         metrics_result["MAPE"].append(mape)
         metrics_result["R2"].append(r2)
 
-        y_test_all.extend(y_true.flatten())
-        y_pred_all.extend(y_pred.flatten())
+        for k, v in fold_metrics.items():
+            results[k].append(v)
+            log_and_flush(logger, f"{k}: {v:.3f}")
+        fold += 1
 
-        log_and_flush(logger, f"[Fold {fold}] RMSE: {rmse:.3f}, MAE: {mae:.3f}, MAPE: {mape:.3f}, R2: {r2:.3f}")
-        log_and_flush(logger, f"[Fold {fold}] Completed in {time.time() - start_time:.2f} seconds")
-    # sample plot, just 1 fold
-    plot_predictions_sorted_by_groundtruth(y_true.flatten(), y_pred.flatten(),
-                    save_path=f"{output_folder}/predictions_groundtruth_sorted_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
-    # Summary
     log_and_flush(logger, "----- Summary (Mean ± Std) -----")
     for metric in metrics_result:
         mean_val = np.mean(metrics_result[metric])
         std_val = np.std(metrics_result[metric])
         log_and_flush(logger, f"{metric}: {mean_val:.3f} ± {std_val:.3f}")
 
-    return metrics_result, y_test_all, y_pred_all
+
+    return results, y_test_all, y_pred_all
+
+
 
 
 def plot_walk_forward_metrics(metrics_result: dict, save_path: str = "walk_forward_metrics.png"):
@@ -421,35 +384,65 @@ def noname():
     log_dir = "./output"
     os.makedirs(log_dir, exist_ok=True)
     current_time = datetime.now()
-    log_path = os.path.join(log_dir, f"gbt_{current_time.strftime('%y%m%d-%H%M%S')}.log")
+    log_path = os.path.join(log_dir, f"rf_2stepdiffinput_{current_time.strftime('%y%m%d-%H%M%S')}.log")
     logger = setup_logger(log_path)
-    for _input_col in input_col_list:
-        log_and_flush(logger,f"Input: {_input_col}")
-        df = readdata()
-        df = datacleaning(df)
-        input_col = _input_col
-        categorical_usecol = [_col for _col in categorical_usecol_all if _col in _input_col]
-        print(f"{categorical_usecol=}")
-        df = create_lag_features_and_target_tomorrow(df,window_size=0)
-        df = preprocessingdata(df)
-        
-        df.to_csv(os.path.join(output_folder,"databeforetrain1.csv"))
 
-        X = df.drop(output_column, axis=1)
-        print()
-        print(f"{X.columns=}")
-        y = df[output_column]
-        metrics_result, y_true, y_pred = GBT_random_cv(
-        X, y,
-        n_splits=50,
-        test_size=0.3
-        )
-        log_and_flush(logger, f"Plotting..., time subfix: {currenttime.strftime('%y%m%d-%H%M%S')}")
+    log_and_flush(logger, "Randomforest 2 Step (diff input)")
 
-        plot_walk_forward_metrics(metrics_result, save_path=f"{output_folder}/metrics_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
-        # plot_predictions_over_time(y_true, y_pred,save_path=f"{output_folder}/predictions_over_time_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
+    df = readdata()
+    df = datacleaning(df)
+
+    input_col = list(set(input_col_today+input_col_tomorrow[:-1])) # 'Độ kiềm tdpred' sẽ đc thêm vào sau
+    log_and_flush(logger,f"Step1 colums: {input_col_today}")
+    log_and_flush(logger,f"Step2 colums: {input_col_tomorrow}")
+    log_and_flush(logger,f"Day shift to predict: {shiftday}")
+
+    categorical_usecol = [_col for _col in categorical_usecol_all if _col in input_col]
+    print(f"{categorical_usecol=}")
+    df = create_lag_features_and_target_tomorrow(df,window_size=0)
+    df = preprocessingdata(df)
+    log_and_flush(logger, f"DataFrame preprocess columns: {df.columns}")
+
+    # Xác định lại các cột tương ứng sau one-hot encode
+    onehot_columns = df.columns.tolist()
+
+    # Tìm các cột tương ứng cho input_col_today
+    X_today_cols = [col for col in onehot_columns if any(orig in col for orig in input_col_today)]
+
+    # Tìm các cột tương ứng cho input_col_tomorrow (bỏ 'Độ kiềm tdpred')
+    X_tomorrow_cols = [col for col in onehot_columns if any(orig in col for orig in input_col_tomorrow if orig != 'Độ kiềm tdpred')]
+
+    # Gán lại X_today và X_tomorrow_base
+    X_today = df[X_today_cols]
+    X_tomorrow_base = df[X_tomorrow_cols]
+
+    # Tách từng phần
+    y_today = df['Độ kiềm']
+    y_tomorrow = df['Độ kiềm_tomorrow']  # hoặc tên tương ứng
     
-    log_and_flush(logger, f"--- End program ---")
+    df.to_csv(os.path.join(output_folder,"databeforetrain1.csv"))
+
+    X = df.drop(output_column, axis=1)
+    print(f"{X.columns=}")
+    y = df[output_column]
+    y_today = df['Độ kiềm']
+
+    metrics_result, y_true, y_pred = RandomForest_random_cv_joint(
+                    X_today, X_tomorrow_base, y_today, y_tomorrow,
+                    input_col_today, input_col_tomorrow,
+                    n_splits=100,
+                    test_size=0.3
+                )
+
+    # metrics_result, y_true, y_pred = RandomForest_random_cv(
+    # X, y,
+    # n_splits=50,
+    # test_size=0.3
+    # )
+    log_and_flush(logger, f"Plotting..., time subfix: {currenttime.strftime('%y%m%d-%H%M%S')}")
+
+    plot_walk_forward_metrics(metrics_result, save_path=f"{output_folder}/metrics_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
+    plot_predictions_over_time(y_true, y_pred,save_path=f"{output_folder}/predictions_over_time_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
 
 
 

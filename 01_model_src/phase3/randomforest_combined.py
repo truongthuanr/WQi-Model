@@ -52,12 +52,14 @@ columns = ['Date',
              ]
 
 
-input_col_list = [
-    #     ['Độ trong', 'Độ cứng', 'Độ mặn', 'Nhiệt độ', 'TDS', 'Loại ao', 'Công nghệ nuôi', 'pH', 'Tuổi tôm'],
-    # ['Độ cứng', 'Độ mặn', 'Nhiệt độ', 'TDS', 'Loại ao', 'Công nghệ nuôi', 'pH', 'Tuổi tôm']
-    ['Độ trong', 'Độ cứng', 'Độ mặn', 'Nhiệt độ', 'TDS', 'Loại ao', 'Công nghệ nuôi', 'pH', 'Tuổi tôm', 'Độ kiềm'],
-    ['Độ cứng', 'Độ mặn', 'Nhiệt độ', 'TDS', 'Loại ao', 'Công nghệ nuôi', 'pH', 'Tuổi tôm', 'Độ kiềm']
-]
+input_col_list = ['Độ màu', 'area', 'Độ mặn', 'Loại ao', 'Độ cứng', 'TDS', 'pH', 'Tuổi tôm', 'Độ kiềm']
+
+# predict_input_col= [
+#     'Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm', 'Ngày thả', 
+#     'area', 'Tuổi tôm', 'Nhiệt độ', 'pH', 'Độ mặn', 'Mực nước', 'Độ trong'
+# ]
+
+# col_need = list(set(input_col_list + predict_input_col))
 
 output_folder = "output"
 
@@ -81,7 +83,7 @@ zscore_lim =  3
 shiftday = -3
 
 def setup_logger(log_path):
-    logger = logging.getLogger('TimeSeriesGBT')
+    logger = logging.getLogger('TimeSeriesRF')
     logger.setLevel(logging.INFO)
 
     handler = RotatingFileHandler(log_path, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')
@@ -257,28 +259,30 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     return df1
 
 
-def GBT_random_cv(
+def RandomForest_random_cv_joint(
     X: pd.DataFrame,
     y: pd.DataFrame,
+    y_today: pd.DataFrame,  # target độ kiềm hôm nay tương ứng với X (để train model hôm nay)
     n_splits: int = 10,
     test_size: float = 0.3,
     random_state: int = 42
 ) -> Tuple[dict, List[float], List[float]]:
     """
-    Random Cross-Validation for Gradient Boosted Tree (non-sliding).
+    Random Cross-Validation gộp train 2 model:
+    - Model 1: dự đoán alkaline hôm nay từ X (không có alkaline)
+    - Model 2: dự đoán alkaline ngày mai từ X + alkaline_today_pred
 
-    Parameters:
-    - X, y: DataFrames with lag features already embedded
-    - n_splits: number of cross-validation folds
-    - test_size: proportion of test set (float, e.g., 0.1 for 10%)
-    - random_state: random seed for reproducibility
+    Tham số:
+    - X: feature đầu vào (không chứa alkaline hôm nay)
+    - y_today: target alkaline hôm nay (cho model 1 train)
+    - y: target alkaline ngày mai (cho model 2 train)
 
-    Returns:
-    - metrics_result: dict of metrics with mean and std
-    - y_test_all: list of all test targets across folds
-    - y_pred_all: list of all predicted values across folds
+    Trả về:
+    - metrics_result: dict metrics của model dự đoán alkaline ngày mai
+    - y_test_all, y_pred_all: giá trị thực và dự đoán của alkaline ngày mai trên tất cả test folds
     """
-    log_and_flush(logger, "Gradient Boosted Tree - Random Cross-Validation")
+
+    log_and_flush(logger, "Random Forest 2 Step - Joint CV for Alkaline Today and Tomorrow")
     log_and_flush(logger, f"Input columns: {list(X.columns)}")
     log_and_flush(logger, f"CV Folds: {n_splits}, Test size: {test_size}")
 
@@ -293,33 +297,65 @@ def GBT_random_cv(
         fold += 1
         start_time = time.time()
 
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        # Lấy train/test
+        X_train, X_test = X.iloc[train_index].copy(), X.iloc[test_index].copy()
+        y_today_train, y_today_test = y_today.iloc[train_index], y_today.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
-        # Chuẩn hóa
+        # --- Bước 1: Train model dự đoán alkaline hôm nay ---
+        # Chuẩn hóa X_train và y_today_train
+        X_scaler_today = StandardScaler()
+        y_scaler_today = StandardScaler()
+
+        X_train_scaled_today = X_scaler_today.fit_transform(X_train)
+        y_train_scaled_today = y_scaler_today.fit_transform(y_today_train.values.reshape(-1, 1))
+
+        model_alkaline_today = RandomForestRegressor(
+            n_estimators=300,
+            max_depth=20,
+            min_samples_split=5,
+            min_samples_leaf=5,
+            max_features='sqrt',
+            random_state=fold,
+            bootstrap=False,
+            verbose=0
+        )
+        model_alkaline_today.fit(X_train_scaled_today, y_train_scaled_today.ravel())
+
+        # Dự đoán alkaline hôm nay cho cả train và test
+        alkaline_train_pred_scaled = model_alkaline_today.predict(X_train_scaled_today).reshape(-1, 1)
+        alkaline_train_pred = y_scaler_today.inverse_transform(alkaline_train_pred_scaled)
+        alkaline_test_pred_scaled = model_alkaline_today.predict(X_scaler_today.transform(X_test)).reshape(-1, 1)
+        alkaline_test_pred = y_scaler_today.inverse_transform(alkaline_test_pred_scaled)
+
+        # Thêm feature alkaline_today_pred vào X_train và X_test
+        X_train['alkaline_today_pred'] = alkaline_train_pred.flatten()
+        X_test['alkaline_today_pred'] = alkaline_test_pred.flatten()
+
+        # --- Bước 2: Train model dự đoán alkaline ngày mai ---
         X_scaler = StandardScaler()
         y_scaler = StandardScaler()
 
         X_train_scaled = X_scaler.fit_transform(X_train)
         y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1))
 
-        gbr = GradientBoostingRegressor(n_estimators=100,
-                                max_depth=10,
-                                min_samples_split=10,
-                                min_samples_leaf=5,
-                                max_features='sqrt', 
-                                loss='squared_error',
-                                random_state=0,
-                                learning_rate=0.02,
-                                verbose=0,
-                                )
+        model_alkaline_tomorrow = RandomForestRegressor(
+            n_estimators=300,
+            max_depth=20,
+            min_samples_split=5,
+            min_samples_leaf=5,
+            max_features='sqrt',
+            random_state=fold,
+            bootstrap=False,
+            verbose=0
+        )
+        model_alkaline_tomorrow.fit(X_train_scaled, y_train_scaled.ravel())
 
-        gbr.fit(X_train_scaled, y_train_scaled.ravel())
-
-        y_pred_scaled = gbr.predict(X_scaler.transform(X_test)).reshape(-1, 1)
+        y_pred_scaled = model_alkaline_tomorrow.predict(X_scaler.transform(X_test)).reshape(-1, 1)
         y_pred = y_scaler.inverse_transform(y_pred_scaled)
         y_true = y_test.values.reshape(-1, 1)
 
+        # Tính metrics
         rmse = root_mean_squared_error(y_true, y_pred)
         mae = mean_absolute_error(y_true, y_pred)
         mape = mean_absolute_percentage_error(y_true, y_pred) * 100
@@ -335,10 +371,11 @@ def GBT_random_cv(
 
         log_and_flush(logger, f"[Fold {fold}] RMSE: {rmse:.3f}, MAE: {mae:.3f}, MAPE: {mape:.3f}, R2: {r2:.3f}")
         log_and_flush(logger, f"[Fold {fold}] Completed in {time.time() - start_time:.2f} seconds")
-    # sample plot, just 1 fold
+
+    # plot + summary tương tự như trước
     plot_predictions_sorted_by_groundtruth(y_true.flatten(), y_pred.flatten(),
                     save_path=f"{output_folder}/predictions_groundtruth_sorted_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
-    # Summary
+
     log_and_flush(logger, "----- Summary (Mean ± Std) -----")
     for metric in metrics_result:
         mean_val = np.mean(metrics_result[metric])
@@ -346,6 +383,7 @@ def GBT_random_cv(
         log_and_flush(logger, f"{metric}: {mean_val:.3f} ± {std_val:.3f}")
 
     return metrics_result, y_test_all, y_pred_all
+
 
 
 def plot_walk_forward_metrics(metrics_result: dict, save_path: str = "walk_forward_metrics.png"):
@@ -421,35 +459,38 @@ def noname():
     log_dir = "./output"
     os.makedirs(log_dir, exist_ok=True)
     current_time = datetime.now()
-    log_path = os.path.join(log_dir, f"gbt_{current_time.strftime('%y%m%d-%H%M%S')}.log")
+    log_path = os.path.join(log_dir, f"randomforest2step_{current_time.strftime('%y%m%d-%H%M%S')}.log")
     logger = setup_logger(log_path)
-    for _input_col in input_col_list:
-        log_and_flush(logger,f"Input: {_input_col}")
-        df = readdata()
-        df = datacleaning(df)
-        input_col = _input_col
-        categorical_usecol = [_col for _col in categorical_usecol_all if _col in _input_col]
-        print(f"{categorical_usecol=}")
-        df = create_lag_features_and_target_tomorrow(df,window_size=0)
-        df = preprocessingdata(df)
-        
-        df.to_csv(os.path.join(output_folder,"databeforetrain1.csv"))
+    # for _input_col in input_col_list:
 
-        X = df.drop(output_column, axis=1)
-        print()
-        print(f"{X.columns=}")
-        y = df[output_column]
-        metrics_result, y_true, y_pred = GBT_random_cv(
-        X, y,
-        n_splits=50,
-        test_size=0.3
-        )
-        log_and_flush(logger, f"Plotting..., time subfix: {currenttime.strftime('%y%m%d-%H%M%S')}")
-
-        plot_walk_forward_metrics(metrics_result, save_path=f"{output_folder}/metrics_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
-        # plot_predictions_over_time(y_true, y_pred,save_path=f"{output_folder}/predictions_over_time_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
+    # log_and_flush(logger,f"Input: {_input_col}")
+    df = readdata()
+    df = datacleaning(df)
+    # input_col = col_need
+    input_col = input_col_list
+    categorical_usecol = [_col for _col in categorical_usecol_all if _col in input_col]
+    print(f"{categorical_usecol=}")
+    df = create_lag_features_and_target_tomorrow(df,window_size=0)
+    df = preprocessingdata(df)
     
-    log_and_flush(logger, f"--- End program ---")
+    df.to_csv(os.path.join(output_folder,"databeforetrain1.csv"))
+
+    X = df.drop(output_column, axis=1)
+    print(f"{X.columns=}")
+    y = df[output_column]
+    y_today = df['Độ kiềm']
+
+    metrics_result, y_true, y_pred = RandomForest_random_cv_joint(X, y, y_today,n_splits=100)
+
+    # metrics_result, y_true, y_pred = RandomForest_random_cv(
+    # X, y,
+    # n_splits=50,
+    # test_size=0.3
+    # )
+    log_and_flush(logger, f"Plotting..., time subfix: {currenttime.strftime('%y%m%d-%H%M%S')}")
+
+    plot_walk_forward_metrics(metrics_result, save_path=f"{output_folder}/metrics_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
+    plot_predictions_over_time(y_true, y_pred,save_path=f"{output_folder}/predictions_over_time_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
 
 
 
