@@ -57,7 +57,7 @@ columns = ['Date',
 input_col_today = ['Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm', 'Ngày thả', 'area', 'Tuổi tôm',
                     'Nhiệt độ', 'pH', 'Độ mặn', 'Mực nước', 'Độ trong', 'Độ kiềm']
 
-input_col_tomorrow =  ['Giống tôm', 'area', 'TDS', 'Độ cứng', 'pH', 'Loại ao', 'Công nghệ nuôi', 'Tuổi tôm', 'Độ kiềm tdpred']  # độ kiềm dự đoán sẽ được thêm sau
+input_col_tomorrow =   ['Nhiệt độ', 'Giống tôm', 'area', 'TDS', 'Độ cứng', 'pH', 'Loại ao', 'Công nghệ nuôi', 'Tuổi tôm', 'Độ kiềm tdpred']  # độ kiềm dự đoán sẽ được thêm sau
 
 # predict_input_col= [
 #     'Season', 'Loại ao', 'Công nghệ nuôi', 'Giống tôm', 'Ngày thả', 
@@ -432,7 +432,7 @@ def noname():
     metrics_result, y_true, y_pred = ANN_random_cv_joint(
                     X_today, X_tomorrow_base, y_today, y_tomorrow,
                     input_col_today, input_col_tomorrow,
-                    n_splits=10,
+                    n_splits=20,
                     test_size=0.3
                 )
 
