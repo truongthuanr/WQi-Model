@@ -62,7 +62,9 @@ columns = [
              ]
 
 
-input_col = ["Độ màu","area","Độ mặn","Loại ao","Độ cứng","TDS","pH","Tuổi tôm", "Độ kiềm"]
+# input_col = ["Độ màu","area","Độ mặn","Loại ao","Độ cứng","TDS","pH","Tuổi tôm", "Độ kiềm"]
+input_col = ["Giống tôm","area","Loại ao","Độ cứng","TDS","pH","Tuổi tôm", "Độ kiềm","Công nghệ nuôi"]
+
 
 output_folder = "output"
 
@@ -234,7 +236,7 @@ def preprocessing_testdata(df: pd.DataFrame, oh_enc)-> pd.DataFrame:
     df1 = pd.concat([oh_df,df1],axis=1)
     df1.drop(categorical_usecol,inplace=True,axis=1)
     return df1
-def RandomForest_random_cv(
+def Ann_random_cv(
     X: pd.DataFrame,
     y: pd.DataFrame,
     X_val: pd.DataFrame,
@@ -244,7 +246,7 @@ def RandomForest_random_cv(
     random_state: int = 42
 ) -> Tuple[dict, List[float], List[float]]:
     """
-    Random Cross-Validation for Random Forest Regression (non-sliding).
+    Random Cross-Validation for ANN Regression (non-sliding).
 
     Parameters:
     - X, y: DataFrames with lag features already embedded
@@ -257,7 +259,7 @@ def RandomForest_random_cv(
     - y_test_all: list of all test targets across folds
     - y_pred_all: list of all predicted values across folds
     """
-    log_and_flush(logger, "Random Forest - Random Cross-Validation")
+    log_and_flush(logger, "ANN - Random Cross-Validation")
     log_and_flush(logger, f"Input columns: {list(X.columns)}")
     log_and_flush(logger, f"CV Folds: {n_splits}, Test size: {test_size}")
 
@@ -277,25 +279,52 @@ def RandomForest_random_cv(
         start_time = time.time()
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+
         # Chuẩn hóa
         X_scaler = StandardScaler()
         y_scaler = StandardScaler()
+
         X_train_scaled = X_scaler.fit_transform(X_train)
         y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1))
-        rf = RandomForestRegressor(
-            n_estimators=300,
-            max_depth=20,
-            min_samples_split=5,
-            min_samples_leaf=5,
-            max_features='sqrt',
-            random_state=fold,
-            bootstrap=False,
-            verbose=0
-        )
-        rf.fit(X_train_scaled, y_train_scaled.ravel())
-        y_pred_scaled = rf.predict(X_scaler.transform(X_test)).reshape(-1, 1)
+
+        # define the model
+        model1 = Sequential()
+        inputshape = len(X.columns)
+        model1.add(Input(shape=(inputshape,)))
+        # Layer #
+        model1.add(Dense(72,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
+        # # Layer #
+        model1.add(Dense(60,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
+        # # Layer #
+        model1.add(Dense(32,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
+
+        # Layer #
+        model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
+
+        model1.add(Dense(1))
+        model1.compile(loss='mae', 
+                    optimizer='nadam',
+                    metrics=['accuracy','r2_score']
+                    )
+        # model1.summary()
+
+
+        # Train model
+        history = model1.fit(X_train_scaled,  y_train_scaled.ravel(),
+                            epochs=200,
+                            batch_size=32,
+                            verbose=False,
+                            validation_split=0.2)
+
+  
+        y_pred_scaled = model1.predict(X_scaler.transform(X_test)).reshape(-1, 1)
         y_pred = y_scaler.inverse_transform(y_pred_scaled)
         y_true = y_test.values.reshape(-1, 1)
+
         rmse = root_mean_squared_error(y_true, y_pred)
         mae = mean_absolute_error(y_true, y_pred)
         mape = mean_absolute_percentage_error(y_true, y_pred) * 100
@@ -309,7 +338,7 @@ def RandomForest_random_cv(
         log_and_flush(logger, f"[Fold {fold}] RMSE: {rmse:.3f}, MAE: {mae:.3f}, MAPE: {mape:.3f}, R2: {r2:.3f}")
         log_and_flush(logger, f"[Fold {fold}] Completed in {time.time() - start_time:.2f} seconds")
         #-------------------------------------------------------------------------------------------------------
-        y_val_pred_scaled = rf.predict(X_scaler.transform(X_val)).reshape(-1, 1)
+        y_val_pred_scaled = model1.predict(X_scaler.transform(X_val)).reshape(-1, 1)
         y_val_pred = y_scaler.inverse_transform(y_val_pred_scaled)
         y_val_true = y_val.values.reshape(-1, 1)
         rmse = root_mean_squared_error(y_val_true, y_val_pred)
@@ -412,7 +441,7 @@ def noname():
     log_dir = "./output"
     os.makedirs(log_dir, exist_ok=True)
     current_time = datetime.now()
-    log_path = os.path.join(log_dir, f"randomforest_{current_time.strftime('%y%m%d-%H%M%S')}.log")
+    log_path = os.path.join(log_dir, f"ann_{current_time.strftime('%y%m%d-%H%M%S')}.log")
     logger = setup_logger(log_path)
     log_and_flush(logger,f"Input: {input_col}")
     df = readdata(filepath="./../../../dataset/data_4perday_cleaned.csv")
@@ -430,7 +459,7 @@ def noname():
 
     X_val = df_val.drop(output_column, axis=1)
     y_val = df_val[output_column]
-    metrics_result, y_true, y_pred = RandomForest_random_cv( X, y, X_val,y_val,  n_splits=20, test_size=0.3
+    metrics_result, y_true, y_pred = Ann_random_cv( X, y, X_val,y_val,  n_splits=20, test_size=0.3
                                                 )
 if __name__ == "__main__":
     print("Running main Program")
