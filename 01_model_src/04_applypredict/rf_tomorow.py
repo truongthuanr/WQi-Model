@@ -81,7 +81,7 @@ categorical_usecol_all = [
     ]
 output_column = ['Độ kiềm_tomorrow']
 zscore_lim =  3
-shiftday = -3
+shiftday = -1
 def setup_logger(log_path):
     logger = logging.getLogger('TimeSeriesRF')
     logger.setLevel(logging.INFO)
@@ -394,7 +394,7 @@ def plot_predictions_sorted_by_groundtruth(y_true: List[float], y_pred: List[flo
     plt.savefig(save_path)
     plt.close()
 def testdata_prepare(oh_enc):
-    _df = readdata("LocAn1.csv")
+    _df = readdata("LocAn1high.csv")
     _df = datacleaning_val(_df)
     _df = create_lag_features_and_target_tomorrow(_df,window_size=0)
     _df = preprocessing_testdata(df=_df, oh_enc=oh_enc)
