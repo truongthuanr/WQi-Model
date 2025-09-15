@@ -1,5 +1,6 @@
 
 import os
+import sys
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from datetime import datetime
 import logging
@@ -83,7 +84,9 @@ categorical_usecol_all = [
     ]
 output_column = ['Độ kiềm_tomorrow']
 zscore_lim =  3
-shiftday = -1
+# shiftday = -1
+shiftday = int(sys.argv[1])
+
 def setup_logger(log_path):
     logger = logging.getLogger('TimeSeriesRF')
     logger.setLevel(logging.INFO)
@@ -110,7 +113,7 @@ def create_lag_features_and_target_tomorrow(
     Áp dụng riêng biệt cho từng 'unit', sắp xếp theo Date.
     """
     if column not in df.columns:
-        raise ValueError(f"Column '{column}' không tồn tại trong DataFrame.")
+        raise ValueError(f"Column '{column}' không tồn tại trong DataFrame.")  
     log_and_flush(logger, f"Tạo lag feature cho '{column}', window size = {window_size}")
     log_and_flush(logger, f"Original shape: {df.shape}")
     df = df.copy()
@@ -139,6 +142,8 @@ def readdata(filepath: str) -> pd.DataFrame:
     # Rename columns Amoni -> Tan 
     df.rename({'Amoni':'TAN'},axis=1,inplace=True)
     return df
+
+
 def datacleaning(df: pd.DataFrame) -> pd.DataFrame:
     # Cột 'Mực nước', thay các ô có giá trị = 0 thành NaN
     # Thay các giá trị NaN bằng median của cột
@@ -160,6 +165,8 @@ def datacleaning(df: pd.DataFrame) -> pd.DataFrame:
     # Drop NA
     df.dropna(axis=0,inplace=True)
     return df
+
+
 def datacleaning_val(df: pd.DataFrame) -> pd.DataFrame:
     # Cột 'Mực nước', thay các ô có giá trị = 0 thành NaN
     # Thay các giá trị NaN bằng median của cột
@@ -181,18 +188,20 @@ def datacleaning_val(df: pd.DataFrame) -> pd.DataFrame:
     # Drop NA
     df.dropna(axis=0,inplace=True)
     return df
+
 def preprocessingdata(df: pd.DataFrame)-> Tuple[pd.DataFrame, Any]:
     print("----- Preprocessing -----")
     df_num = df.drop(categorical_col,axis=1).copy()
     df1 = df[(np.abs(stats.zscore(df_num))<zscore_lim).all(axis=1)].copy()
+
     # Giữ lại tất cả cột cần thiết cho huấn luyện
     selected_cols = input_col + output_column
-    # ✅ Giữ lại thêm các cột lag nếu có
+    
+    # ✅ Giữ lại thêm các cột lag
     lag_cols = [col for col in df.columns if 'lag' in col]
     selected_cols += lag_cols
     df1 = df[selected_cols + categorical_usecol].copy()
 
-    # df1 = df1[input_col + output_column].copy()
     df1.reset_index(drop=True,inplace=True)
 
     print("One hot encorder")
@@ -204,7 +213,6 @@ def preprocessingdata(df: pd.DataFrame)-> Tuple[pd.DataFrame, Any]:
     print(oh_df.columns)
     df1 = pd.concat([oh_df,df1],axis=1)
     df1.drop(categorical_usecol,inplace=True,axis=1)
-
     return df1, oh_enc
 
 
@@ -236,6 +244,7 @@ def preprocessing_testdata(df: pd.DataFrame, oh_enc)-> pd.DataFrame:
     df1 = pd.concat([oh_df,df1],axis=1)
     df1.drop(categorical_usecol,inplace=True,axis=1)
     return df1
+
 def Ann_random_cv(
     X: pd.DataFrame,
     y: pd.DataFrame,
@@ -335,8 +344,8 @@ def Ann_random_cv(
         metrics_result["R2"].append(r2)
         y_test_all.extend(y_true.flatten())
         y_pred_all.extend(y_pred.flatten())
-        log_and_flush(logger, f"[Fold {fold}] RMSE: {rmse:.3f}, MAE: {mae:.3f}, MAPE: {mape:.3f}, R2: {r2:.3f}")
-        log_and_flush(logger, f"[Fold {fold}] Completed in {time.time() - start_time:.2f} seconds")
+        log_and_flush(logger, f"[Fold {fold} - Test] RMSE: {rmse:.3f}, MAE: {mae:.3f}, MAPE: {mape:.3f}, R2: {r2:.3f}")
+        # log_and_flush(logger, f"[Fold {fold}] Completed in {time.time() - start_time:.2f} seconds")
         #-------------------------------------------------------------------------------------------------------
         y_val_pred_scaled = model1.predict(X_scaler.transform(X_val)).reshape(-1, 1)
         y_val_pred = y_scaler.inverse_transform(y_val_pred_scaled)
@@ -349,6 +358,7 @@ def Ann_random_cv(
         metrics_val_result["MAE"].append(mae)
         metrics_val_result["MAPE"].append(mape)
         metrics_val_result["R2"].append(r2)
+        log_and_flush(logger, f"[Fold {fold} - Val] RMSE: {rmse:.3f}, MAE: {mae:.3f}, MAPE: {mape:.3f}, R2: {r2:.3f}")
         y_val_test_all.extend(y_val_true.flatten())
         y_val_pred_all.extend(y_val_pred.flatten())
     # sample plot, just 1 fold
@@ -409,21 +419,21 @@ def plot_predictions_sorted_by_groundtruth(y_true: List[float], y_pred: List[flo
     y_pred_sorted = y_pred[sorted_idx]
     plt.figure(figsize=(12, 5))
     # plt.plot(y_true_sorted, label='Actual (Sorted)', color='blue', linewidth=2)
-    plt.plot(y_true, label='Actual', color='#34495e', linewidth=1)
+    plt.plot(y_true, label='Độ kiềm thực', color='#34495e', linewidth=1)
 
     # plt.plot(y_pred_sorted,  label='Predicted (Sorted by Actual)',  color='orange', linestyle='', marker='2')
-    plt.plot(y_pred,  label='Predicted',  color='#3498db', linestyle='--', marker='', linewidth=1)
+    plt.plot(y_pred,  label='Độ kiềm dự đoán',  color='#3498db', linestyle='--', marker='', linewidth=1)
 
-    plt.title("Actual vs Predicted Values Sorted by Actual", fontsize=14)
-    # plt.xlabel("Index (Sorted by Actual Value)")
-    plt.ylabel("Target Value")
+    # plt.title("Actual vs Predicted Values Sorted by Actual", fontsize=14)
+    plt.xlabel("Số mẫu")
+    plt.ylabel("Độ kiềm")
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()
 def testdata_prepare(oh_enc):
-    _df = readdata("LocAn1high.csv")
+    _df = readdata("LocAn1low.csv")
     _df = datacleaning_val(_df)
     _df = create_lag_features_and_target_tomorrow(_df,window_size=0)
     _df = preprocessing_testdata(df=_df, oh_enc=oh_enc)
@@ -443,6 +453,9 @@ def noname():
     current_time = datetime.now()
     log_path = os.path.join(log_dir, f"ann_{current_time.strftime('%y%m%d-%H%M%S')}.log")
     logger = setup_logger(log_path)
+    log_and_flush(logger,"------------------------------------------------------------------")
+    log_and_flush(logger,f"ANN Model (Kiềm thực) - Dự đoán {int(shiftday*-1)} ngày tiếp theo")
+    log_and_flush(logger,"------------------------------------------------------------------")
     log_and_flush(logger,f"Input: {input_col}")
     df = readdata(filepath="./../../../dataset/data_4perday_cleaned.csv")
     df = datacleaning(df)
@@ -459,7 +472,7 @@ def noname():
 
     X_val = df_val.drop(output_column, axis=1)
     y_val = df_val[output_column]
-    metrics_result, y_true, y_pred = Ann_random_cv( X, y, X_val,y_val,  n_splits=20, test_size=0.3
+    metrics_result, y_true, y_pred = Ann_random_cv( X, y, X_val,y_val,  n_splits=200, test_size=0.3
                                                 )
 if __name__ == "__main__":
     print("Running main Program")

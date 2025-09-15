@@ -1,5 +1,6 @@
 
 import os
+import sys
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from datetime import datetime
 import logging
@@ -86,7 +87,8 @@ categorical_usecol_all = [
     ]
 output_column = ['Độ kiềm_tomorrow']
 zscore_lim =  3
-shiftday = -1
+# shiftday = -3
+shiftday = int(sys.argv[1])
 def setup_logger(log_path):
     logger = logging.getLogger('TimeSeriesRF')
     logger.setLevel(logging.INFO)
@@ -137,11 +139,11 @@ def create_lag_features_and_target_tomorrow(
 
 def readdata(filepath: str) -> pd.DataFrame:
     print("Read data!")
-    # df = pd.read_csv("./../../../dataset/data_4perday_cleaned.csv", usecols=columns)
     df = pd.read_csv(filepath, usecols=columns)
     # Rename columns Amoni -> Tan 
     df.rename({'Amoni':'TAN'},axis=1,inplace=True)
     return df
+
 def datacleaning(df: pd.DataFrame) -> pd.DataFrame:
     # Cột 'Mực nước', thay các ô có giá trị = 0 thành NaN
     # Thay các giá trị NaN bằng median của cột
@@ -163,6 +165,8 @@ def datacleaning(df: pd.DataFrame) -> pd.DataFrame:
     # Drop NA
     df.dropna(axis=0,inplace=True)
     return df
+
+
 def datacleaning_val(df: pd.DataFrame) -> pd.DataFrame:
     # Cột 'Mực nước', thay các ô có giá trị = 0 thành NaN
     # Thay các giá trị NaN bằng median của cột
@@ -184,6 +188,7 @@ def datacleaning_val(df: pd.DataFrame) -> pd.DataFrame:
     # Drop NA
     df.dropna(axis=0,inplace=True)
     return df
+
 def preprocessingdata(df: pd.DataFrame)-> Tuple[pd.DataFrame, Any]:
     print("----- Preprocessing -----")
     df_num = df.drop(categorical_col,axis=1).copy()
@@ -195,9 +200,7 @@ def preprocessingdata(df: pd.DataFrame)-> Tuple[pd.DataFrame, Any]:
     selected_cols += lag_cols
     df1 = df[selected_cols + categorical_usecol].copy()
 
-    # df1 = df1[input_col + output_column].copy()
     df1.reset_index(drop=True,inplace=True)
-
     print("One hot encorder")
     oh_enc = OneHotEncoder(sparse_output=False)
     oh_enc.fit(df1[categorical_usecol])
@@ -207,7 +210,6 @@ def preprocessingdata(df: pd.DataFrame)-> Tuple[pd.DataFrame, Any]:
     print(oh_df.columns)
     df1 = pd.concat([oh_df,df1],axis=1)
     df1.drop(categorical_usecol,inplace=True,axis=1)
-
     return df1, oh_enc
 
 
@@ -239,6 +241,7 @@ def preprocessing_testdata(df: pd.DataFrame, oh_enc)-> pd.DataFrame:
     df1 = pd.concat([oh_df,df1],axis=1)
     df1.drop(categorical_usecol,inplace=True,axis=1)
     return df1
+
 def Ann_random_cv(
     X_today, X_tomorrow_base, y_today, y_tomorrow,
     Xval_today, Xval_tomorrow_base, yval_today, yval_tomorrow,
@@ -358,10 +361,12 @@ def Ann_random_cv(
         metrics_result["MAPE"].append(mape)
         metrics_result["R2"].append(r2)
 
-        for k, v in fold_metrics.items():
-            results[k].append(v)
-            log_and_flush(logger, f"{k}: {v:.3f}")
-        fold += 1
+        # for k, v in fold_metrics.items():
+        #     results[k].append(v)
+        #     log_and_flush(logger, f"{k}: {v:.3f}")
+        log_and_flush(logger, f"[Test] RMSE: {rmse:.3f}, MAE: {mae:.3f}, MAPE: {mape:.3f}, R2: {r2:.3f}")
+
+        
 
         #-------------------------------------------------------------------------------------------------------
         alkaline_today_pred = model_today.predict(Xval_today)
@@ -389,6 +394,8 @@ def Ann_random_cv(
         metrics_val_result["MAE"].append(mae)
         metrics_val_result["MAPE"].append(mape)
         metrics_val_result["R2"].append(r2)
+        log_and_flush(logger, f"[Val] RMSE : {rmse:.3f}, MAE: {mae:.3f}, MAPE: {mape:.3f}, R2: {r2:.3f}")
+        fold += 1
         # y_val_test_all.extend(y_val_true.flatten())
         # y_val_pred_all.extend(y_val_pred.flatten())
     # sample plot, just 1 fold
@@ -411,6 +418,7 @@ def Ann_random_cv(
         std_val = np.std(metrics_val_result[metric])
         log_and_flush(logger, f"{metric}: {mean_val:.3f} ± {std_val:.3f}")
     return metrics_result, y_test_all, y_pred_all
+
 
 def plot_walk_forward_metrics(metrics_result: dict, save_path: str = "walk_forward_metrics.png"):
     plt.figure(figsize=(14, 6))
@@ -449,21 +457,22 @@ def plot_predictions_sorted_by_groundtruth(y_true: List[float], y_pred: List[flo
     y_pred_sorted = y_pred[sorted_idx]
     plt.figure(figsize=(12, 5))
     # plt.plot(y_true_sorted, label='Actual (Sorted)', color='blue', linewidth=2)
-    plt.plot(y_true, label='Actual', color='#34495e', linewidth=1)
+    plt.plot(y_true, label='Độ kiềm thực', color='#34495e', linewidth=1)
 
     # plt.plot(y_pred_sorted,  label='Predicted (Sorted by Actual)',  color='orange', linestyle='', marker='2')
-    plt.plot(y_pred,  label='Predicted',  color='#3498db', linestyle='--', marker='', linewidth=1)
+    plt.plot(y_pred,  label='Độ kiềm dự đoán',  color='#3498db', linestyle='--', marker='', linewidth=1)
 
-    plt.title("Actual vs Predicted Values Sorted by Actual", fontsize=14)
-    plt.xlabel("Index (Sorted by Actual Value)")
-    plt.ylabel("Target Value")
+    # plt.title("Actual vs Predicted Values Sorted by Actual", fontsize=14)
+    plt.xlabel("Số mẫu")
+    plt.ylabel("Độ kiềm")
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()
+    
 def testdata_prepare(oh_enc):
-    _df = readdata("LocAn1high.csv")
+    _df = readdata("LocAn1low.csv")
     _df = datacleaning_val(_df)
     _df = create_lag_features_and_target_tomorrow(_df,window_size=0)
     _df = preprocessing_testdata(df=_df, oh_enc=oh_enc)
@@ -497,16 +506,23 @@ def noname():
     log_dir = "./output"
     os.makedirs(log_dir, exist_ok=True)
     current_time = datetime.now()
-    log_path = os.path.join(log_dir, f"anndiff_{current_time.strftime('%y%m%d-%H%M%S')}.log")
+    log_path = os.path.join(log_dir, f"ann_2step_{current_time.strftime('%y%m%d-%H%M%S')}.log")
     logger = setup_logger(log_path)
     # log_and_flush(logger,f"Input: {input_col}")
     df = readdata(filepath="./../../../dataset/data_4perday_cleaned.csv")
     df = datacleaning(df)
 
     input_col = list(set(input_col_today+input_col_tomorrow[:-1])) # 'Độ kiềm tdpred' sẽ đc thêm vào sau
+    # log_and_flush(logger,f"Step1 colums: {input_col_today}")
+    # log_and_flush(logger,f"Step2 colums: {input_col_tomorrow}")
+    # log_and_flush(logger,f"Day shift to predict: {shiftday}")
+
+    log_and_flush(logger,"----------------------------------------------------------------------")
+    log_and_flush(logger,f"ANN Model (Kiềm dự đoán) - Dự đoán {int(shiftday*-1)} ngày tiếp theo")
+    log_and_flush(logger,"----------------------------------------------------------------------")
+    # log_and_flush(logger,f"Input: {input_col}")
     log_and_flush(logger,f"Step1 colums: {input_col_today}")
     log_and_flush(logger,f"Step2 colums: {input_col_tomorrow}")
-    log_and_flush(logger,f"Day shift to predict: {shiftday}")
 
     categorical_usecol = [_col for _col in categorical_usecol_all if _col in input_col]
     print(f"{categorical_usecol=}")
@@ -543,7 +559,7 @@ def noname():
     # y_val = df_val[output_column]
     metrics_result, y_true, y_pred = Ann_random_cv( X_today, X_tomorrow_base, y_today, y_tomorrow,
                                                             Xval_today, Xval_tomorrow_base, yval_today, yval_tomorrow,  
-                                                            n_splits=20, test_size=0.3
+                                                            n_splits=200, test_size=0.3
                                                 )
 if __name__ == "__main__":
     print("Running main Program")
