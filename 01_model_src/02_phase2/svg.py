@@ -120,14 +120,16 @@ input_col4 = [
     # 'Độ màu',
     ]
 input_col_list = [
-    ["Độ trong", "Độ màu", "TDS", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
-    ["Độ màu", "TDS", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
-    ["TDS", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
-    ["Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
-    ["Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
-    ["Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
-    ["Độ trong", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Nhiệt độ", "pH", "Tuổi tôm"],
-    ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
+    # ["Độ trong", "Độ màu", "TDS", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    # ["Độ màu", "TDS", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    # ["TDS", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    # ["Loại ao", "Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    # ["Công nghệ nuôi", "Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    # ["Độ mặn", "Độ cứng", "Nhiệt độ", "pH", "Tuổi tôm"],
+    # ["Độ trong", "Loại ao", "Công nghệ nuôi", "Độ mặn", "Nhiệt độ", "pH", "Tuổi tôm"],
+    # ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
+    ["Công nghệ nuôi", "Giống tôm", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong", "Loại ao"]
+
 ]
 
 # input_col_list = [input_col1, input_col2,input_col3,
@@ -325,43 +327,129 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
 
     return df1
 
+def mean_error(y_true, y_pred):
+    return np.mean(y_true - y_pred)
 
-def svg_model(X: pd.DataFrame, y):
-    _currenttime = datetime.strftime(currenttime,"%y%m%d-%H%M%S")
-    with open(f"./output/svg_{_currenttime}.log","a+",encoding="utf-8") as logfile:
-        _currenttime = datetime.strftime(currenttime,"%y-%m-%d %H:%M:%S")
-        logfile.write("SVG Result\n")
-        logfile.write(f"Time Record:\t {_currenttime}\n")
+def svg_model(X: pd.DataFrame, y, n_repeats: int = 200, test_size: float = 0.33):
+    ts_for_file = datetime.strftime(currenttime, "%y%m%d-%H%M%S")
+    log_path = f"./output/svg_{ts_for_file}.log"
+
+    metrics_result = {
+        "RMSE_test": [], "RMSE_train": [],
+        "MAE_test": [], "MAE_train": [],
+        "MAPE_test": [], "MAPE_train": [],
+        "MPE_test": [], "MPE_train": [],
+        "R2_test": [], "R2_train": [],
+        "ME_test": [], "ME_train": []
+    }
+
+    last_y_test_np = None
+    last_y_pred_inv = None
+
+    with open(log_path, "a+", encoding="utf-8") as logfile:
+        ts_for_text = datetime.strftime(currenttime, "%y-%m-%d %H:%M:%S")
+        logfile.write("SVR (RBF) - Repeated Random Splits\n")
+        logfile.write(f"Time Record:\t {ts_for_text}\n")
         logfile.write(f"Input columns:\t {input_col}\n")
-        logfile.write(f"Data train columns:\t {X.columns}\n")
-        
-        X_train, X_test, y_train, y_test = train_test_split(
-                        X, y, test_size=0.33, random_state=1)
-        X_sc = StandardScaler()
-        X_sc.fit(X_train)
-        X_train_tf = X_sc.transform(X_train)
+        logfile.write(f"Data train columns:\t {list(X.columns)}\n")
+        logfile.write(f"Repeats:\t {n_repeats}\n")
+        logfile.write(f"Test size:\t {test_size}\n\n")
+        logfile.write(
+            "RMSE_test\tRMSE_train\tMAE_test\tMAE_train\tMAPE_test\tMAPE_train\tMPE_test\tMPE_train\tR2_test\tR2_train\n"
+        )
 
-        y_sc = StandardScaler()
-        y_sc.fit(y_train)
-        y_train_tf = y_sc.transform(y_train)
+        for repeat in range(n_repeats):
+            # Train/Test split (vary random_state)
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=repeat
+            )
 
-        SVRreg = svm.SVR(kernel='rbf',epsilon=0.5,C=10)
-        # print(f"{X_train.shape=} {y_train.shape=}")
-        SVRreg.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
+            # Scaling per split
+            X_sc = StandardScaler().fit(X_train)
+            X_train_tf = X_sc.transform(X_train)
+            y_sc = StandardScaler().fit(y_train)
+            y_train_tf = y_sc.transform(y_train)
 
-        y_pred = SVRreg.predict(X_sc.transform(X_test))
-        y_pred = np.reshape(y_pred,(-1,1))
-        
-        i=0;
-        y_test=y_test.to_numpy()
-        y_pred=y_sc.inverse_transform(y_pred)
-        error_text = f"RMSE:\t {root_mean_squared_error(y_test[:,i],y_pred[:,i]):.3f}" + "\n" +\
-                f"MAE:\t {mean_absolute_error(y_test[:,i],y_pred[:,i]):.3f}"+ "\n" +\
-                f"MAPE(%):\t {mean_absolute_percentage_error(y_test[:,i],y_pred[:,i])*100:.3f}"+ "\n" +\
-                f"R2 Score:\t {r2_score(y_test[:,i],y_pred[:,i]):.3f}\n"
-        
-        logfile.write(error_text)
-        logfile.write("\n------------------\n\n")
+            # Model
+            SVRreg = svm.SVR(kernel='rbf', epsilon=0.5, C=10)
+            SVRreg.fit(X_train_tf, np.reshape(y_train_tf, (-1)))
+
+            # Predictions (test + train)
+            y_pred_test = SVRreg.predict(X_sc.transform(X_test)).reshape(-1, 1)
+            y_pred_train = SVRreg.predict(X_train_tf).reshape(-1, 1)
+
+            # Inverse transform targets
+            y_test_np = y_test.to_numpy()
+            y_train_np = y_train.to_numpy()
+            y_pred_inv = y_sc.inverse_transform(y_pred_test)
+            y_train_inv = y_sc.inverse_transform(y_pred_train)
+
+            # Metrics
+            rmse_test = root_mean_squared_error(y_test_np, y_pred_inv)
+            rmse_train = root_mean_squared_error(y_train_np, y_train_inv)
+            mae_test = mean_absolute_error(y_test_np, y_pred_inv)
+            mae_train = mean_absolute_error(y_train_np, y_train_inv)
+            mape_test = mean_absolute_percentage_error(y_test_np, y_pred_inv) * 100
+            mape_train = mean_absolute_percentage_error(y_train_np, y_train_inv) * 100
+            me_test = mean_error(y_test_np, y_pred_inv)
+            me_train = mean_error(y_train_np, y_train_inv)
+
+            def _mpe(y_true, y_hat):
+                y_true = y_true.reshape(-1)
+                y_hat = y_hat.reshape(-1)
+                mask = y_true != 0
+                if not np.any(mask):
+                    return np.nan
+                return np.mean((y_true[mask] - y_hat[mask]) / y_true[mask]) * 100
+
+            mpe_test = _mpe(y_test_np, y_pred_inv)
+            mpe_train = _mpe(y_train_np, y_train_inv)
+
+            r2_test = r2_score(y_test_np, y_pred_inv)
+            r2_train = r2_score(y_train_np, y_train_inv)
+
+            # Accumulate
+            metrics_result["RMSE_test"].append(rmse_test)
+            metrics_result["RMSE_train"].append(rmse_train)
+            metrics_result["MAE_test"].append(mae_test)
+            metrics_result["MAE_train"].append(mae_train)
+            metrics_result["MAPE_test"].append(mape_test)
+            metrics_result["MAPE_train"].append(mape_train)
+            metrics_result["MPE_test"].append(mpe_test)
+            metrics_result["MPE_train"].append(mpe_train)
+            metrics_result["R2_test"].append(r2_test)
+            metrics_result["R2_train"].append(r2_train)
+            metrics_result["ME_test"].append(me_test)
+            metrics_result["ME_train"].append(me_train)
+            
+            
+
+            logfile.write(
+                f"{rmse_test:.3f}\t{rmse_train:.3f}\t{mae_test:.3f}\t{mae_train:.3f}\t{mape_test:.3f}\t{mape_train:.3f}\t{mpe_test:.3f}\t{mpe_train:.3f}\t{r2_test:.3f}\t{r2_train:.3f}\t{me_train}\t{me_test}\n"
+            )
+
+            # Keep last predictions for CSV
+            last_y_test_np = y_test_np
+            last_y_pred_inv = y_pred_inv
+
+        # Summary
+        logfile.write("\n----- Summary (Mean +/- Std) -----\n")
+        for k in metrics_result:
+            mean_val = float(np.mean(metrics_result[k]))
+            std_val = float(np.std(metrics_result[k]))
+            logfile.write(f"{k}: {mean_val:.3f} +/- {std_val:.3f}\n")
+
+    # Save predictions for later use
+    try:
+        if last_y_test_np is not None and last_y_pred_inv is not None:
+            df_save = pd.DataFrame({
+                'y_test': last_y_test_np.reshape(-1),
+                'y_pred': last_y_pred_inv.reshape(-1)
+            })
+            out_csv = os.path.join(output_folder, f"svr_last_predictions_{ts_for_file}.csv")
+            df_save.to_csv(out_csv, index=False)
+    except Exception as e:
+        print(f"Failed to save SVR predictions CSV: {e}")
         
     
 

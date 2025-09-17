@@ -53,7 +53,9 @@ input_col_list = [
     # ["TDS", "Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
     # ["Độ cứng", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
     # ["DO", "Nhiệt độ", "Giống tôm", "area", "pH", "Loại ao", "Công nghệ nuôi", "Tuổi tôm"],
-    ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
+    # ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
+    ["Công nghệ nuôi", "Giống tôm", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong", "Loại ao"]
+
 ]
 output_folder = "output"
 categorical_col = ['Date',
@@ -71,6 +73,9 @@ categorical_usecol_all = [
 # output_column = ['TAN', 'Nitrat', 'Nitrit', 'Silica', 'Canxi', 'Kali', 'Magie', 'Độ kiềm', 'Độ cứng']
 output_column = ['Độ kiềm']
 zscore_lim =  3
+
+def mean_error(y_true, y_pred):
+    return np.mean(y_true - y_pred)
 
 def plot_result3x3(y_test,y_pred,output_column):
     fig = plt.figure(figsize = [8,8])
@@ -234,7 +239,12 @@ def ANN_model_with_repeated_random_subsampling(X: pd.DataFrame, y: pd.DataFrame,
     log_path = f"./output/ann_repeated_{_currenttime}.log"
 
     metrics_result = {
-        "RMSE": [], "MAE": [], "MAPE": [], "R2": []
+        "RMSE_test": [], "RMSE_train": [],
+        "MAE_test": [], "MAE_train": [],
+        "MAPE_test": [], "MAPE_train": [],
+        "MPE_test": [], "MPE_train": [],
+        "R2_test": [], "R2_train": [],
+        "ME_test": [], "ME_train": []
     }
 
     with open(log_path, "a+", encoding="utf-8") as logfile:
@@ -243,8 +253,11 @@ def ANN_model_with_repeated_random_subsampling(X: pd.DataFrame, y: pd.DataFrame,
         logfile.write(f"Input columns:\t {input_col}\n")
         logfile.write(f"Repeats:\t {n_repeats}\n")
         logfile.write(f"Test size:\t {test_size}\n\n")
-        logfile.write("RMSE\tMAE\tMAPE\tR2\n")
+        logfile.write("RMSE_test\tRMSE_train\tMAE_test\tMAE_train\tMAPE_test\tMAPE_train\tMPE_test\tMPE_train\tR2_test\tR2_train\n")
 
+        # Hold last predictions for saving
+        last_y_test_np = None
+        last_y_pred_inv = None
         for repeat in range(n_repeats):
             print(f"----- SET {repeat} -----")
             X_train, X_test, y_train, y_test = train_test_split(
@@ -289,30 +302,80 @@ def ANN_model_with_repeated_random_subsampling(X: pd.DataFrame, y: pd.DataFrame,
                                 verbose=False,
                                 validation_split=0.2)
             
-            # Evaluate model on the test set
-            y_pred = model1.predict(X_sc.transform(X_test))
-            y_pred = y_sc.inverse_transform(y_pred)
+            # Evaluate model on test and train
+            y_pred_test = model1.predict(X_sc.transform(X_test))
+            y_pred_train = model1.predict(X_train_tf)
+
+            # Inverse transform to original scale
+            y_pred_inv = y_sc.inverse_transform(y_pred_test)
+            y_train_inv = y_sc.inverse_transform(y_pred_train)
+            y_test_np = y_test.to_numpy()
+            y_train_np = y_train.to_numpy()
+
+            # Metrics
+            rmse_test = root_mean_squared_error(y_test_np, y_pred_inv)
+            rmse_train = root_mean_squared_error(y_train_np, y_train_inv)
+            mae_test = mean_absolute_error(y_test_np, y_pred_inv)
+            mae_train = mean_absolute_error(y_train_np, y_train_inv)
+            mape_test = mean_absolute_percentage_error(y_test_np, y_pred_inv) * 100
+            mape_train = mean_absolute_percentage_error(y_train_np, y_train_inv) * 100
+            me_train = mean_error(y_train_np, y_train_inv)
+            me_test = mean_error(y_test_np, y_pred_inv)
+
+            def _mpe(y_true, y_hat):
+                y_true = y_true.reshape(-1)
+                y_hat = y_hat.reshape(-1)
+                mask = y_true != 0
+                if not np.any(mask):
+                    return np.nan
+                return np.mean((y_true[mask] - y_hat[mask]) / y_true[mask]) * 100
+
+            mpe_test = _mpe(y_test_np, y_pred_inv)
+            mpe_train = _mpe(y_train_np, y_train_inv)
+
+            r2_test = r2_score(y_test_np, y_pred_inv)
+            r2_train = r2_score(y_train_np, y_train_inv)
+
+            # Accumulate
+            metrics_result["RMSE_test"].append(rmse_test)
+            metrics_result["RMSE_train"].append(rmse_train)
+            metrics_result["MAE_test"].append(mae_test)
+            metrics_result["MAE_train"].append(mae_train)
+            metrics_result["MAPE_test"].append(mape_test)
+            metrics_result["MAPE_train"].append(mape_train)
+            metrics_result["MPE_test"].append(mpe_test)
+            metrics_result["MPE_train"].append(mpe_train)
+            metrics_result["R2_test"].append(r2_test)
+            metrics_result["R2_train"].append(r2_train)
+            metrics_result["ME_test"].append(me_test)
+            metrics_result["ME_train"].append(me_train)
             
-            # Calculate errors
-            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-            mae = mean_absolute_error(y_test, y_pred)
-            mape = mean_absolute_percentage_error(y_test, y_pred) * 100
-            r2 = r2_score(y_test, y_pred)
 
-            metrics_result["RMSE"].append(rmse)
-            metrics_result["MAE"].append(mae)
-            metrics_result["MAPE"].append(mape)
-            metrics_result["R2"].append(r2)
+            logfile.write(f"{rmse_test:.3f}\t{rmse_train:.3f}\t{mae_test:.3f}\t{mae_train:.3f}\t{mape_test:.3f}\t{mape_train:.3f}\t{mpe_test:.3f}\t{mpe_train:.3f}\t{r2_test:.3f}\t{r2_train:.3f}\t{me_test:.3f}\t{me_train:.3f}\n")
 
-            logfile.write(f"{rmse:.3f}\t{mae:.3f}\t{mape:.3f}\t{r2:.3f}\n")
+            # Keep last predictions for saving after loop
+            last_y_test_np = y_test_np
+            last_y_pred_inv = y_pred_inv
 
-        logfile.write("\n----- Summary (Mean ± Std) -----\n")
+        logfile.write("\n----- Summary (Mean +/- Std) -----\n")
         for k in metrics_result:
             mean_val = np.mean(metrics_result[k])
             std_val = np.std(metrics_result[k])
-            logfile.write(f"{k}: {mean_val:.3f} ± {std_val:.3f}\n")
-        
+    
 
+
+    # Save last test/pred for later use
+    try:
+        if last_y_test_np is not None and last_y_pred_inv is not None:
+            df_save = pd.DataFrame({
+                'y_test': last_y_test_np.reshape(-1),
+                'y_pred': last_y_pred_inv.reshape(-1)
+            })
+            suffix = datetime.strftime(currenttime, "%y%m%d-%H%M%S")
+            out_csv = os.path.join(output_folder, f"ann_last_predictions_{suffix}.csv")
+            df_save.to_csv(out_csv, index=False)
+    except Exception as e:
+        print(f"Failed to save ANN predictions CSV: {e}")
 def noname():
     # np.set_printoptions(suppress=True)
     pd.options.display.float_format = '{:.6f}'.format

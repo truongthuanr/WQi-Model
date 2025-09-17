@@ -121,14 +121,17 @@ input_col4 = [
     ]
 
 input_col_list = [
-    ["Độ đục", "Độ trong", "Độ cứng", "Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
-    ["Độ trong", "Độ cứng", "Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
-    ["Độ cứng", "Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
-    ["Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
-    ["Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
-    ["TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
-    ["Độ trong", "Độ mặn", "Nhiệt độ", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
-    ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
+    # ["Độ đục", "Độ trong", "Độ cứng", "Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    # ["Độ trong", "Độ cứng", "Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    # ["Độ cứng", "Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    # ["Độ mặn", "Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    # ["Nhiệt độ", "TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    # ["TDS", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    # ["Độ trong", "Độ mặn", "Nhiệt độ", "Loại ao", "Công nghệ nuôi", "pH", "Tuổi tôm"],
+    # ["Season", "Loại ao", "Công nghệ nuôi", "Giống tôm", "Ngày thả", "area", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong"]
+    ["Công nghệ nuôi", "Giống tôm", "Tuổi tôm", "Nhiệt độ", "pH", "Độ mặn", "Mực nước", "Độ trong", "Loại ao"]
+
+
 ]
 
 
@@ -155,6 +158,29 @@ categorical_usecol_all = [
 # output_column = ['TAN', 'Nitrat', 'Nitrit', 'Silica', 'Canxi', 'Kali', 'Magie', 'Độ kiềm', 'Độ cứng']
 output_column = ['Độ kiềm']
 zscore_lim =  3
+
+def setup_gpu():
+    """Enable TensorFlow GPU memory growth if a GPU is available.
+    Note: scikit-learn GradientBoostingRegressor does not use GPU.
+    """
+    try:
+        import tensorflow as tf
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            for gpu in gpus:
+                try:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                except Exception:
+                    pass
+            try:
+                names = [getattr(g, 'name', 'GPU') for g in gpus]
+                print(f"GPU available: {names}")
+            except Exception:
+                print("GPU available and memory growth set.")
+        else:
+            print("No GPU detected by TensorFlow.")
+    except Exception as e:
+        print(f"GPU setup skipped: {e}")
 
 def plot_result3x3(y_test,y_pred,output_column):
     fig = plt.figure(figsize = [8,8])
@@ -331,7 +357,12 @@ def gbt_model_repeated(X: pd.DataFrame, y: pd.DataFrame, n_repeats: int = 10, te
     log_path = f"./output/gbt_repeated_{_currenttime}.log"
 
     metrics_result = {
-        "RMSE": [], "MAE": [], "MAPE": [], "R2": []
+        "RMSE_test": [], "RMSE_train": [],
+        "MAE_test": [], "MAE_train": [],
+        "MAPE_test": [], "MAPE_train": [],
+        "MPE_test": [], "MPE_train": [],
+        "R2_test": [], "R2_train": [],
+        "ME_test": [], "ME_train": []
     }
 
     with open(log_path, "a+", encoding="utf-8") as logfile:
@@ -340,7 +371,7 @@ def gbt_model_repeated(X: pd.DataFrame, y: pd.DataFrame, n_repeats: int = 10, te
         logfile.write(f"Input columns:\t {input_col}\n")
         logfile.write(f"Repeats:\t {n_repeats}\n")
         logfile.write(f"Test size:\t {test_size}\n\n")
-        logfile.write("RMSE\tMAE\tMAPE\tR2\n")
+        logfile.write("RMSE_test\tRMSE_train\tMAE_test\tMAE_train\tMAPE_test\tMAPE_train\tMPE_test\tMPE_train\tR2_test\tR2_train\tME_test\tME_train\n")
         
         for repeat in range(n_repeats):
             print(f"-------- SET {repeat} ----------")
@@ -370,26 +401,69 @@ def gbt_model_repeated(X: pd.DataFrame, y: pd.DataFrame, n_repeats: int = 10, te
             gbr.fit(X_train_tf,np.reshape(y_train_tf,(-1)))
 
             y_pred = gbr.predict(X_sc.transform(X_test)).reshape(-1, 1)
+            y_train_pred = gbr.predict(X_train_tf).reshape(-1, 1)
             y_test_np = y_test.to_numpy()
+            y_train_np = y_train.to_numpy()
             y_pred_inv = y_sc.inverse_transform(y_pred)
+            y_train_inv = y_sc.inverse_transform(y_train_pred)
         
-            rmse = root_mean_squared_error(y_test_np, y_pred_inv)
-            mae = mean_absolute_error(y_test_np, y_pred_inv)
-            mape = mean_absolute_percentage_error(y_test_np, y_pred_inv) * 100
-            r2 = r2_score(y_test_np, y_pred_inv)
+            rmse_test = root_mean_squared_error(y_test_np, y_pred_inv)
+            rmse_train = root_mean_squared_error(y_train_np, y_train_inv)
+            mae_test = mean_absolute_error(y_test_np, y_pred_inv)
+            mae_train = mean_absolute_error(y_train_np, y_train_inv)
+            mape_test = mean_absolute_percentage_error(y_test_np, y_pred_inv) * 100
+            mape_train = mean_absolute_percentage_error(y_train_np, y_train_inv) * 100
+            me_test = np.mean(y_test_np - y_pred_inv)
+            me_train = np.mean(y_train_np - y_train_inv)
 
-            metrics_result["RMSE"].append(rmse)
-            metrics_result["MAE"].append(mae)
-            metrics_result["MAPE"].append(mape)
-            metrics_result["R2"].append(r2)
+            # Mean Percentage Error (signed). Avoid divide-by-zero
+            def _mpe(y_true, y_pred):
+                y_true = y_true.reshape(-1)
+                y_pred = y_pred.reshape(-1)
+                mask = y_true != 0
+                if not np.any(mask):
+                    return np.nan
+                return np.mean((y_true[mask] - y_pred[mask]) / y_true[mask]) * 100
 
-            logfile.write(f"{rmse:.3f}\t{mae:.3f}\t{mape:.3f}\t{r2:.3f}\n")
+            mpe_test = _mpe(y_test_np, y_pred_inv)
+            mpe_train = _mpe(y_train_np, y_train_inv)
+
+            r2_test = r2_score(y_test_np, y_pred_inv)
+            r2_train = r2_score(y_train_np, y_train_inv)
+
+            metrics_result["RMSE_test"].append(rmse_test)
+            metrics_result["RMSE_train"].append(rmse_train)
+            metrics_result["MAE_test"].append(mae_test)
+            metrics_result["MAE_train"].append(mae_train)
+            metrics_result["MAPE_test"].append(mape_test)
+            metrics_result["MAPE_train"].append(mape_train)
+            metrics_result["MPE_test"].append(mpe_test)
+            metrics_result["MPE_train"].append(mpe_train)
+            metrics_result["R2_test"].append(r2_test)
+            metrics_result["R2_train"].append(r2_train)
+            metrics_result["ME_test"].append(me_test)
+            metrics_result["ME_train"].append(me_train)
+            
+
+            logfile.write(f"{rmse_test:.3f}\t{rmse_train:.3f}\t{mae_test:.3f}\t{mae_train:.3f}\t{mape_test:.3f}\t{mape_train:.3f}\t{mpe_test:.3f}\t{mpe_train:.3f}\t{r2_test:.3f}\t{r2_train:.3f}\n")
 
         logfile.write("\n----- Summary (Mean ± Std) -----\n")
         for k in metrics_result:
             mean_val = np.mean(metrics_result[k])
             std_val = np.std(metrics_result[k])
             logfile.write(f"{k}: {mean_val:.3f} ± {std_val:.3f}\n")
+
+        # Save last y_test and y_pred_inv to CSV for later use
+        try:
+            df_save = pd.DataFrame({
+                'y_test': y_test_np.reshape(-1),
+                'y_pred': y_pred_inv.reshape(-1)
+            })
+            suffix = datetime.strftime(currenttime, "%y%m%d-%H%M%S")
+            out_csv = os.path.join(output_folder, f"gbt_last_predictions_{suffix}.csv")
+            df_save.to_csv(out_csv, index=False)
+        except Exception as e:
+            print(f"Failed to save last GBT predictions CSV: {e}")
         
 def noname():
     # np.set_printoptions(suppress=True)
@@ -400,6 +474,8 @@ def noname():
     currenttime = datetime.now()
     global input_col 
     global categorical_usecol
+    # Setup GPU for TF (sklearn GBT remains on CPU)
+    setup_gpu()
     for _input_col in input_col_list:
         df = readdata()
         df = datacleaning(df)
