@@ -361,6 +361,7 @@ def ANN_model_with_repeated_random_subsampling(X: pd.DataFrame, y: pd.DataFrame,
         for k in metrics_result:
             mean_val = np.mean(metrics_result[k])
             std_val = np.std(metrics_result[k])
+            logfile.write(f"{k}: {mean_val:.3f} +/- {std_val:.3f}\n")
     
 
 

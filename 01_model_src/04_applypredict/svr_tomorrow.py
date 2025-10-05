@@ -89,7 +89,7 @@ zscore_lim =  3
 
 shiftday = int(sys.argv[1])
 def setup_logger(log_path):
-    logger = logging.getLogger('TimeSeriesRF')
+    logger = logging.getLogger('TimeSeriesSVR')
     logger.setLevel(logging.INFO)
 
     handler = RotatingFileHandler(log_path, maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')
@@ -254,7 +254,7 @@ def preprocessing_testdata(df: pd.DataFrame, oh_enc)-> pd.DataFrame:
     df1 = pd.concat([oh_df,df1],axis=1)
     df1.drop(categorical_usecol,inplace=True,axis=1)
     return df1
-def RandomForest_random_cv(
+def SVR_random_cv(
     X: pd.DataFrame,
     y: pd.DataFrame,
     X_val: pd.DataFrame,
@@ -264,9 +264,9 @@ def RandomForest_random_cv(
     random_state: int = 42
 ) -> Tuple[dict, List[float], List[float]]:
     """
-    Random Cross-Validation for Random Forest Regression (non-sliding).
+    Random Cross-Validation for SVR Regression (non-sliding).
     """
-    log_and_flush(logger, "Random Forest - Random Cross-Validation")
+    log_and_flush(logger, "SVR - Random Cross-Validation")
     log_and_flush(logger, f"Input columns: {list(X.columns)}")
     log_and_flush(logger, f"CV Folds: {n_splits}, Test size: {test_size}")
 
@@ -297,19 +297,10 @@ def RandomForest_random_cv(
         X_train_scaled = X_scaler.fit_transform(X_train)
         y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1))
 
-        rf = RandomForestRegressor(
-            n_estimators=300,
-            max_depth=20,
-            min_samples_split=5,
-            min_samples_leaf=5,
-            max_features='sqrt',
-            random_state=fold,
-            bootstrap=False,
-            verbose=0
-        )
-        rf.fit(X_train_scaled, y_train_scaled.ravel())
+        svr = svm.SVR(kernel='rbf', C=100.0, gamma='scale', epsilon=0.1)
+        svr.fit(X_train_scaled, y_train_scaled.ravel())
 
-        y_train_pred_scaled = rf.predict(X_train_scaled).reshape(-1, 1)
+        y_train_pred_scaled = svr.predict(X_train_scaled).reshape(-1, 1)
         y_train_pred = y_scaler.inverse_transform(y_train_pred_scaled)
         y_train_true = y_train.values.reshape(-1, 1)
         y_train_true_flat = y_train_true.flatten()
@@ -336,7 +327,7 @@ def RandomForest_random_cv(
         for t, p in zip(y_train_true_flat, y_train_pred_flat):
             train_records.append({"fold": fold, "dataset": "train", "y_true": float(t), "y_pred": float(p)})
 
-        y_pred_scaled = rf.predict(X_scaler.transform(X_test)).reshape(-1, 1)
+        y_pred_scaled = svr.predict(X_scaler.transform(X_test)).reshape(-1, 1)
         y_pred = y_scaler.inverse_transform(y_pred_scaled)
         y_true = y_test.values.reshape(-1, 1)
         y_true_flat = y_true.flatten()
@@ -365,7 +356,7 @@ def RandomForest_random_cv(
         for t, p in zip(y_true_flat, y_pred_flat):
             test_records.append({"fold": fold, "dataset": "test", "y_true": float(t), "y_pred": float(p)})
 
-        y_val_pred_scaled = rf.predict(X_scaler.transform(X_val)).reshape(-1, 1)
+        y_val_pred_scaled = svr.predict(X_scaler.transform(X_val)).reshape(-1, 1)
         y_val_pred = y_scaler.inverse_transform(y_val_pred_scaled)
         y_val_true = y_val.values.reshape(-1, 1)
         y_val_true_flat = y_val_true.flatten()
@@ -418,7 +409,7 @@ def RandomForest_random_cv(
         predictions_df = pd.DataFrame(prediction_records)
         predictions_path = os.path.join(
             output_folder,
-            f"randomforest_random_cv_predictions_{currenttime.strftime('%y%m%d-%H%M%S')}.csv",
+            f"svr_random_cv_predictions_{currenttime.strftime('%y%m%d-%H%M%S')}.csv",
         )
         predictions_df.to_csv(predictions_path, index=False)
         log_and_flush(logger, f"Saved predictions snapshot to {predictions_path}")
@@ -484,7 +475,7 @@ def noname():
     log_dir = "./output"
     os.makedirs(log_dir, exist_ok=True)
     current_time = datetime.now()
-    log_path = os.path.join(log_dir, f"randomforest_{current_time.strftime('%y%m%d-%H%M%S')}.log")
+    log_path = os.path.join(log_dir, f"svr_{current_time.strftime('%y%m%d-%H%M%S')}.log")
     logger = setup_logger(log_path)
     log_and_flush(logger,"------------------------------------------------------------------")
     log_and_flush(logger,f"Random Forest Model (Kiềm thực) - Dự đoán {int(shiftday*-1)} ngày tiếp theo")
@@ -505,7 +496,7 @@ def noname():
 
     X_val = df_val.drop(output_column, axis=1)
     y_val = df_val[output_column]
-    metrics_result, y_true, y_pred = RandomForest_random_cv( X, y, X_val,y_val,  n_splits=200, test_size=0.3
+    metrics_result, y_true, y_pred = SVR_random_cv( X, y, X_val,y_val,  n_splits=200, test_size=0.3
                                                 )
 if __name__ == "__main__":
     print("Running main Program")

@@ -40,15 +40,15 @@ columns = [
            'Vụ nuôi', 
         'module_name', 
         'ao', 
-        #    'Ngày thả', 
+           'Ngày thả', 
         'Time',
-        # 'Nhiệt độ', 
+        'Nhiệt độ', 
         'pH',
          'Độ mặn', 
            'TDS',
         #  'Độ đục', 'DO', 
         'Độ màu',
-        #  'Độ trong',
+         'Độ trong',
         'Độ kiềm', 
            'Độ cứng',
            'Loại ao',
@@ -64,8 +64,9 @@ columns = [
 
 
 # input_col = ["Độ màu","area","Độ mặn","Loại ao","Độ cứng","TDS","pH","Tuổi tôm", "Độ kiềm"]
-input_col = ["Giống tôm","area","Loại ao","Độ cứng","TDS","pH","Tuổi tôm", "Độ kiềm","Công nghệ nuôi"]
-
+# input_col = ["Giống tôm","area","Loại ao","Độ cứng","TDS","pH","Tuổi tôm", "Độ kiềm","Công nghệ nuôi"]
+input_col = ["Season","Loại ao","Công nghệ nuôi","Giống tôm","Ngày thả","area","Tuổi tôm",
+             "Độ mặn","Nhiệt độ","pH", "Độ kiềm","Mực nước","Độ trong",]
 
 output_folder = "output"
 
@@ -245,6 +246,23 @@ def preprocessing_testdata(df: pd.DataFrame, oh_enc)-> pd.DataFrame:
     df1.drop(categorical_usecol,inplace=True,axis=1)
     return df1
 
+def mean_percentage_error(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    y_true = np.asarray(y_true, dtype=float).reshape(-1)
+    y_pred = np.asarray(y_pred, dtype=float).reshape(-1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        percentage_errors = np.where(y_true != 0, (y_true - y_pred) / y_true, np.nan)
+    mpe = np.nanmean(percentage_errors) * 100
+    if np.isnan(mpe):
+        return 0.0
+    return float(mpe)
+
+
+def mean_error(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    y_true = np.asarray(y_true, dtype=float).reshape(-1)
+    y_pred = np.asarray(y_pred, dtype=float).reshape(-1)
+    return float(np.mean(y_pred - y_true))
+
+
 def Ann_random_cv(
     X: pd.DataFrame,
     y: pd.DataFrame,
@@ -274,13 +292,17 @@ def Ann_random_cv(
 
     splitter = ShuffleSplit(n_splits=n_splits, test_size=test_size, random_state=random_state)
 
-    metrics_result = {"RMSE": [], "MAE": [], "MAPE": [], "R2": []}
-    metrics_val_result = {"RMSE": [], "MAE": [], "MAPE": [], "R2": []}
+    metrics_train_result = {"RMSE": [], "MAE": [], "MAPE": [], "R2": [], "MPE": [], "ME": []}
+    metrics_result = {"RMSE": [], "MAE": [], "MAPE": [], "R2": [], "MPE": [], "ME": []}
+    metrics_val_result = {"RMSE": [], "MAE": [], "MAPE": [], "R2": [], "MPE": [], "ME": []}
 
     y_test_all = []
     y_pred_all = []
     y_val_test_all = []
     y_val_pred_all = []
+    train_records = []
+    test_records = []
+    val_records = []
 
     fold = 0
     for train_index, test_index in splitter.split(X):
@@ -289,98 +311,156 @@ def Ann_random_cv(
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
-        # Chuẩn hóa
         X_scaler = StandardScaler()
         y_scaler = StandardScaler()
 
         X_train_scaled = X_scaler.fit_transform(X_train)
         y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1))
 
-        # define the model
         model1 = Sequential()
         inputshape = len(X.columns)
         model1.add(Input(shape=(inputshape,)))
-        # Layer #
-        model1.add(Dense(72,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dense(72, kernel_initializer='he_uniform', activation='relu'))
         model1.add(Dropout(0.1))
-        # # Layer #
-        model1.add(Dense(60,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dense(60, kernel_initializer='he_uniform', activation='relu'))
         model1.add(Dropout(0.1))
-        # # Layer #
-        model1.add(Dense(32,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dense(32, kernel_initializer='he_uniform', activation='relu'))
         model1.add(Dropout(0.1))
-
-        # Layer #
         model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
         model1.add(Dropout(0.1))
-
         model1.add(Dense(1))
-        model1.compile(loss='mae', 
-                    optimizer='nadam',
-                    metrics=['accuracy','r2_score']
-                    )
-        # model1.summary()
+        model1.compile(
+            loss='mae',
+            optimizer='nadam',
+            metrics=['accuracy', 'r2_score']
+        )
 
+        history = model1.fit(
+            X_train_scaled,
+            y_train_scaled.ravel(),
+            epochs=200,
+            batch_size=32,
+            verbose=False,
+            validation_split=0.2
+        )
 
-        # Train model
-        history = model1.fit(X_train_scaled,  y_train_scaled.ravel(),
-                            epochs=200,
-                            batch_size=32,
-                            verbose=False,
-                            validation_split=0.2)
+        y_train_pred_scaled = model1.predict(X_train_scaled).reshape(-1, 1)
+        y_train_pred = y_scaler.inverse_transform(y_train_pred_scaled)
+        y_train_true = y_train.values.reshape(-1, 1)
+        y_train_true_flat = y_train_true.flatten()
+        y_train_pred_flat = y_train_pred.flatten()
 
-  
+        train_rmse = root_mean_squared_error(y_train_true_flat, y_train_pred_flat)
+        train_mae = mean_absolute_error(y_train_true_flat, y_train_pred_flat)
+        train_mape = mean_absolute_percentage_error(y_train_true_flat, y_train_pred_flat) * 100
+        train_r2 = r2_score(y_train_true_flat, y_train_pred_flat)
+        train_mpe = mean_percentage_error(y_train_true_flat, y_train_pred_flat)
+        train_me = mean_error(y_train_true_flat, y_train_pred_flat)
+
+        metrics_train_result["RMSE"].append(train_rmse)
+        metrics_train_result["MAE"].append(train_mae)
+        metrics_train_result["MAPE"].append(train_mape)
+        metrics_train_result["R2"].append(train_r2)
+        metrics_train_result["MPE"].append(train_mpe)
+        metrics_train_result["ME"].append(train_me)
+        log_and_flush(
+            logger,
+            f"[Fold {fold} - Train] RMSE: {train_rmse:.3f}, MAE: {train_mae:.3f}, "
+            f"MAPE: {train_mape:.3f}, R2: {train_r2:.3f}, MPE: {train_mpe:.3f}, ME: {train_me:.3f}"
+        )
+        for t, p in zip(y_train_true_flat, y_train_pred_flat):
+            train_records.append({"fold": fold, "dataset": "train", "y_true": float(t), "y_pred": float(p)})
+
         y_pred_scaled = model1.predict(X_scaler.transform(X_test)).reshape(-1, 1)
         y_pred = y_scaler.inverse_transform(y_pred_scaled)
         y_true = y_test.values.reshape(-1, 1)
+        y_true_flat = y_true.flatten()
+        y_pred_flat = y_pred.flatten()
 
-        rmse = root_mean_squared_error(y_true, y_pred)
-        mae = mean_absolute_error(y_true, y_pred)
-        mape = mean_absolute_percentage_error(y_true, y_pred) * 100
-        r2 = r2_score(y_true, y_pred)
+        rmse = root_mean_squared_error(y_true_flat, y_pred_flat)
+        mae = mean_absolute_error(y_true_flat, y_pred_flat)
+        mape = mean_absolute_percentage_error(y_true_flat, y_pred_flat) * 100
+        r2 = r2_score(y_true_flat, y_pred_flat)
+        mpe = mean_percentage_error(y_true_flat, y_pred_flat)
+        me = mean_error(y_true_flat, y_pred_flat)
+
         metrics_result["RMSE"].append(rmse)
         metrics_result["MAE"].append(mae)
         metrics_result["MAPE"].append(mape)
         metrics_result["R2"].append(r2)
-        y_test_all.extend(y_true.flatten())
-        y_pred_all.extend(y_pred.flatten())
-        log_and_flush(logger, f"[Fold {fold} - Test] RMSE: {rmse:.3f}, MAE: {mae:.3f}, MAPE: {mape:.3f}, R2: {r2:.3f}")
-        # log_and_flush(logger, f"[Fold {fold}] Completed in {time.time() - start_time:.2f} seconds")
-        #-------------------------------------------------------------------------------------------------------
+        metrics_result["MPE"].append(mpe)
+        metrics_result["ME"].append(me)
+        y_test_all.extend(y_true_flat)
+        y_pred_all.extend(y_pred_flat)
+        log_and_flush(
+            logger,
+            f"[Fold {fold} - Test] RMSE: {rmse:.3f}, MAE: {mae:.3f}, "
+            f"MAPE: {mape:.3f}, R2: {r2:.3f}, MPE: {mpe:.3f}, ME: {me:.3f}"
+        )
+        for t, p in zip(y_true_flat, y_pred_flat):
+            test_records.append({"fold": fold, "dataset": "test", "y_true": float(t), "y_pred": float(p)})
+
         y_val_pred_scaled = model1.predict(X_scaler.transform(X_val)).reshape(-1, 1)
         y_val_pred = y_scaler.inverse_transform(y_val_pred_scaled)
         y_val_true = y_val.values.reshape(-1, 1)
-        rmse = root_mean_squared_error(y_val_true, y_val_pred)
-        mae = mean_absolute_error(y_val_true, y_val_pred)
-        mape = mean_absolute_percentage_error(y_val_true, y_val_pred) * 100
-        r2 = r2_score(y_val_true, y_val_pred)
+        y_val_true_flat = y_val_true.flatten()
+        y_val_pred_flat = y_val_pred.flatten()
+
+        rmse = root_mean_squared_error(y_val_true_flat, y_val_pred_flat)
+        mae = mean_absolute_error(y_val_true_flat, y_val_pred_flat)
+        mape = mean_absolute_percentage_error(y_val_true_flat, y_val_pred_flat) * 100
+        r2 = r2_score(y_val_true_flat, y_val_pred_flat)
+        mpe = mean_percentage_error(y_val_true_flat, y_val_pred_flat)
+        me = mean_error(y_val_true_flat, y_val_pred_flat)
+
         metrics_val_result["RMSE"].append(rmse)
         metrics_val_result["MAE"].append(mae)
         metrics_val_result["MAPE"].append(mape)
         metrics_val_result["R2"].append(r2)
-        log_and_flush(logger, f"[Fold {fold} - Val] RMSE: {rmse:.3f}, MAE: {mae:.3f}, MAPE: {mape:.3f}, R2: {r2:.3f}")
-        y_val_test_all.extend(y_val_true.flatten())
-        y_val_pred_all.extend(y_val_pred.flatten())
-    # sample plot, just 1 fold
-    plot_predictions_sorted_by_groundtruth(y_true.flatten(), y_pred.flatten(),
-                    save_path=f"{output_folder}/predictions_groundtruth_sorted_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
-    
-    # sample plot, just 1 fold
-    plot_predictions_sorted_by_groundtruth(y_val_true.flatten(), y_val_pred.flatten(),
-                    save_path=f"{output_folder}/val_groundtruth_sorted_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
-    
-    # Summary
-    log_and_flush(logger, "----- Summary (Mean ± Std) -----")
-    for metric in metrics_result:
-        mean_val = np.mean(metrics_result[metric])
-        std_val = np.std(metrics_result[metric])
-        log_and_flush(logger, f"{metric}: {mean_val:.3f} ± {std_val:.3f}")
-    log_and_flush(logger, "----- Summary Val Data (Mean ± Std) -----")
-    for metric in metrics_val_result:
-        mean_val = np.mean(metrics_val_result[metric])
-        std_val = np.std(metrics_val_result[metric])
-        log_and_flush(logger, f"{metric}: {mean_val:.3f} ± {std_val:.3f}")
+        metrics_val_result["MPE"].append(mpe)
+        metrics_val_result["ME"].append(me)
+        log_and_flush(
+            logger,
+            f"[Fold {fold} - Val] RMSE: {rmse:.3f}, MAE: {mae:.3f}, "
+            f"MAPE: {mape:.3f}, R2: {r2:.3f}, MPE: {mpe:.3f}, ME: {me:.3f}"
+        )
+        y_val_test_all.extend(y_val_true_flat)
+        y_val_pred_all.extend(y_val_pred_flat)
+        for t, p in zip(y_val_true_flat, y_val_pred_flat):
+            val_records.append({"fold": fold, "dataset": "validation", "y_true": float(t), "y_pred": float(p)})
+
+    plot_predictions_sorted_by_groundtruth(
+        y_true_flat,
+        y_pred_flat,
+        save_path=f"{output_folder}/predictions_groundtruth_sorted_{currenttime.strftime('%y%m%d-%H%M%S')}.png"
+    )
+
+    plot_predictions_sorted_by_groundtruth(
+        y_val_true_flat,
+        y_val_pred_flat,
+        save_path=f"{output_folder}/val_groundtruth_sorted_{currenttime.strftime('%y%m%d-%H%M%S')}.png"
+    )
+
+    log_and_flush(logger, "----- Metrics Summary (Mean +/- Std) -----")
+    for label, metrics_dict in [("Train", metrics_train_result), ("Test", metrics_result), ("Validation", metrics_val_result)]:
+        log_and_flush(logger, f"{label} data:")
+        for metric, values in metrics_dict.items():
+            mean_val = np.mean(values)
+            std_val = np.std(values)
+            log_and_flush(logger, f"{metric}: {mean_val:.3f} +/- {std_val:.3f}")
+
+    prediction_records = train_records + test_records + val_records
+    if prediction_records:
+        predictions_df = pd.DataFrame(prediction_records)
+        predictions_path = os.path.join(
+            output_folder,
+            f"ann_random_cv_predictions_{currenttime.strftime('%y%m%d-%H%M%S')}.csv",
+        )
+        predictions_df.to_csv(predictions_path, index=False)
+        log_and_flush(logger, f"Saved predictions snapshot to {predictions_path}")
+
     return metrics_result, y_test_all, y_pred_all
+
 
 def plot_walk_forward_metrics(metrics_result: dict, save_path: str = "walk_forward_metrics.png"):
     plt.figure(figsize=(14, 6))

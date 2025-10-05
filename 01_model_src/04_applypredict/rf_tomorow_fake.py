@@ -64,8 +64,8 @@ columns = [
 
 
 # input_col = ["Độ màu","area","Độ mặn","Loại ao","Độ cứng","TDS","pH","Tuổi tôm", "Độ kiềm"]
-input_col = ["Season","Loại ao","Công nghệ nuôi","Giống tôm","Ngày thả","area","Tuổi tôm",
-             "Độ mặn","Nhiệt độ","pH", "Độ kiềm","Mực nước","Độ trong",]
+input_col = ["Season","Loại ao","Công nghệ nuôi","Giống tôm","Ngày thả","Tuổi tôm",
+             "Độ mặn","Nhiệt độ","pH", "Độ kiềm"]
 
 
 output_folder = "output"
@@ -186,7 +186,7 @@ def datacleaning_val(df: pd.DataFrame) -> pd.DataFrame:
     # Drop cols "Time"
     df.drop(['Time'], axis=1,inplace=True)
     # Format "Date"
-    df['Date'] = pd.to_datetime(df['Date'],format='%m/%d/%Y  %H:%M')
+    df['Date'] = pd.to_datetime(df['Date'],format='%Y-%m-%d')
     # convert 'Tuoi tom' column to numeric
     # cell which is not able to convert to float (#REF) will be fill as NaN
     df['Tuổi tôm'] = df['Tuổi tôm'].apply(lambda x: 
@@ -464,7 +464,7 @@ def plot_predictions_sorted_by_groundtruth(y_true: List[float], y_pred: List[flo
     plt.savefig(save_path)
     plt.close()
 def testdata_prepare(oh_enc):
-    filepath = "LocAn1.csv"
+    filepath = "kiemtra_1_enriched_clean.csv"
     log_and_flush(logger,f"Đọc dữ liệu test từ {filepath}")
     _df = readdata(filepath)
     _df = datacleaning_val(_df)
@@ -505,7 +505,7 @@ def noname():
 
     X_val = df_val.drop(output_column, axis=1)
     y_val = df_val[output_column]
-    metrics_result, y_true, y_pred = RandomForest_random_cv( X, y, X_val,y_val,  n_splits=200, test_size=0.3
+    metrics_result, y_true, y_pred = RandomForest_random_cv( X, y, X_val,y_val,  n_splits=10, test_size=0.3
                                                 )
 if __name__ == "__main__":
     print("Running main Program")
