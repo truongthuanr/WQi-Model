@@ -308,30 +308,28 @@ def preprocessingdata(df: pd.DataFrame)-> pd.DataFrame:
     return df1
 
 
-def RandomForest_random_cv_joint(
+def Ann_random_cv(
     X: pd.DataFrame,
     y: pd.DataFrame,
-    y_today: pd.DataFrame,  # target độ kiềm hôm nay tương ứng với X (để train model hôm nay)
     n_splits: int = 10,
     test_size: float = 0.3,
     random_state: int = 42
 ) -> Tuple[dict, List[float], List[float]]:
     """
-    Random Cross-Validation gộp train 2 model:
-    - Model 1: dự đoán alkaline hôm nay từ X (không có alkaline)
-    - Model 2: dự đoán alkaline ngày mai từ X + alkaline_today_pred
+    Random Cross-Validation for ANN (non-sliding).
 
-    Tham số:
-    - X: feature đầu vào (không chứa alkaline hôm nay)
-    - y_today: target alkaline hôm nay (cho model 1 train)
-    - y: target alkaline ngày mai (cho model 2 train)
+    Parameters:
+    - X, y: DataFrames with lag features already embedded
+    - n_splits: number of cross-validation folds
+    - test_size: proportion of test set (float, e.g., 0.1 for 10%)
+    - random_state: random seed for reproducibility
 
-    Trả về:
-    - metrics_result: dict metrics của model dự đoán alkaline ngày mai
-    - y_test_all, y_pred_all: giá trị thực và dự đoán của alkaline ngày mai trên tất cả test folds
+    Returns:
+    - metrics_result: dict of metrics with mean and std
+    - y_test_all: list of all test targets across folds
+    - y_pred_all: list of all predicted values across folds
     """
-
-    log_and_flush(logger, "Random Forest 2 Step - Joint CV for Alkaline Today and Afternoon")
+    log_and_flush(logger, "ANN - Random Cross-Validation")
     log_and_flush(logger, f"Input columns: {list(X.columns)}")
     log_and_flush(logger, f"CV Folds: {n_splits}, Test size: {test_size}")
 
@@ -346,70 +344,59 @@ def RandomForest_random_cv_joint(
         fold += 1
         start_time = time.time()
 
-        # Lấy train/test
-        X_train, X_test = X.iloc[train_index].copy(), X.iloc[test_index].copy()
-        y_today_train, y_today_test = y_today.iloc[train_index], y_today.iloc[test_index]
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
-        # --- Bước 1: Train model dự đoán alkaline hôm nay ---
-        # Chuẩn hóa X_train và y_today_train
-        X_scaler_today = StandardScaler()
-        y_scaler_today = StandardScaler()
-
-        X_train_scaled_today = X_scaler_today.fit_transform(X_train)
-        y_train_scaled_today = y_scaler_today.fit_transform(y_today_train.values.reshape(-1, 1))
-
-        model_alkaline_today = RandomForestRegressor(
-            n_estimators=300,
-            max_depth=20,
-            min_samples_split=5,
-            min_samples_leaf=5,
-            max_features='sqrt',
-            random_state=fold,
-            bootstrap=False,
-            verbose=0
-        )
-        model_alkaline_today.fit(X_train_scaled_today, y_train_scaled_today.ravel())
-
-        # Dự đoán alkaline hôm nay cho cả train và test
-        alkaline_train_pred_scaled = model_alkaline_today.predict(X_train_scaled_today).reshape(-1, 1)
-        alkaline_train_pred = y_scaler_today.inverse_transform(alkaline_train_pred_scaled)
-        alkaline_test_pred_scaled = model_alkaline_today.predict(X_scaler_today.transform(X_test)).reshape(-1, 1)
-        alkaline_test_pred = y_scaler_today.inverse_transform(alkaline_test_pred_scaled)
-
-        # Thêm feature alkaline_today_pred vào X_train và X_test
-        X_train['alkaline_today_pred'] = alkaline_train_pred.flatten()
-        X_test['alkaline_today_pred'] = alkaline_test_pred.flatten()
-
-        # --- Bước 2: Train model dự đoán alkaline ngày mai ---
+        # Chuẩn hóa
         X_scaler = StandardScaler()
         y_scaler = StandardScaler()
 
         X_train_scaled = X_scaler.fit_transform(X_train)
         y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1))
 
-        model_alkaline_tomorrow = RandomForestRegressor(
-            n_estimators=300,
-            max_depth=20,
-            min_samples_split=5,
-            min_samples_leaf=5,
-            max_features='sqrt',
-            random_state=fold,
-            bootstrap=False,
-            verbose=0
-        )
-        model_alkaline_tomorrow.fit(X_train_scaled, y_train_scaled.ravel())
+        # define the model
+        model1 = Sequential()
+        inputshape = len(X.columns)
+        model1.add(Input(shape=(inputshape,)))
+        # Layer #
+        model1.add(Dense(72,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
+        # # Layer #
+        model1.add(Dense(60,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
+        # # Layer #
+        model1.add(Dense(32,kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
 
-        y_pred_scaled = model_alkaline_tomorrow.predict(X_scaler.transform(X_test)).reshape(-1, 1)
+        # Layer #
+        model1.add(Dense(8, kernel_initializer='he_uniform', activation='relu'))
+        model1.add(Dropout(0.1))
+
+        model1.add(Dense(1))
+        model1.compile(loss='mae', 
+                    optimizer='nadam',
+                    metrics=['accuracy','r2_score']
+                    )
+        # model1.summary()
+
+
+        # Train model
+        history = model1.fit(X_train_scaled,  y_train_scaled.ravel(),
+                            epochs=200,
+                            batch_size=32,
+                            verbose=False,
+                            validation_split=0.2)
+
+  
+        y_pred_scaled = model1.predict(X_scaler.transform(X_test)).reshape(-1, 1)
         y_pred = y_scaler.inverse_transform(y_pred_scaled)
         y_true = y_test.values.reshape(-1, 1)
 
-        # Tính metrics
         rmse = root_mean_squared_error(y_true, y_pred)
         mae = mean_absolute_error(y_true, y_pred)
         mape = mean_absolute_percentage_error(y_true, y_pred) * 100
         r2 = r2_score(y_true, y_pred)
-        # ME: mean error (y_pred - y_true) and MPE: mean percentage error (%)
+        # ME: mean error, MPE: mean percentage error (%)
         y_true_f = y_true.flatten()
         y_pred_f = y_pred.flatten()
         err = y_pred_f - y_true_f
@@ -429,11 +416,10 @@ def RandomForest_random_cv_joint(
 
         log_and_flush(logger, f"[Fold {fold}] RMSE: {rmse:.3f}, MAE: {mae:.3f}, MAPE: {mape:.3f}, MPE: {mpe:.3f}, ME: {me:.3f}, R2: {r2:.3f}")
         log_and_flush(logger, f"[Fold {fold}] Completed in {time.time() - start_time:.2f} seconds")
-
-    # plot + summary tương tự như trước
+    # sample plot, just 1 fold
     plot_predictions_sorted_by_groundtruth(y_true.flatten(), y_pred.flatten(),
                     save_path=f"{output_folder}/predictions_groundtruth_sorted_{currenttime.strftime('%y%m%d-%H%M%S')}.png")
-
+    # Summary
     log_and_flush(logger, "----- Summary (Mean ± Std) -----")
     for metric in metrics_result:
         mean_val = np.mean(metrics_result[metric])
@@ -554,7 +540,7 @@ def noname():
     y = df[output_column]
     y_today = df['Độ kiềm']
 
-    metrics_result, y_true, y_pred = RandomForest_random_cv_joint(X, y, y_today,n_splits=100)
+    metrics_result, y_true, y_pred = Ann_random_cv(X, y,n_splits=100)
 
     # metrics_result, y_true, y_pred = RandomForest_random_cv(
     # X, y,
