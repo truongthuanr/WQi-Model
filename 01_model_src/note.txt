@@ -1,0 +1,22 @@
+Hãng/Model: Dell Inc. Precision 3581
+OS: Windows 11 Pro (64-bit)
+CPU: Intel Core i7-13800H (14 cores / 20 threads, max 2.50 GHz)
+RAM: 15.69 GB (~16 GB)
+GPU: NVIDIA RTX A1000 Laptop GPU
+
+Phiên bản python: 3.8
+Thư viện python: 
+    - os 
+    - datetime 
+    - logging
+    - pandas
+    - numpy
+    - scipy
+    - matplotlib
+    - seaborn
+    - sklearn
+    - keras
+    - tensorflow
+    - scikeras
+    - time
+    - typing
